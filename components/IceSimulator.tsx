@@ -92,6 +92,7 @@ export function IceSimulator() {
 
   return (
     <div className="space-y-5">
+      <ScenarioPickerHeader />
       <ScenarioPicker
         scenarios={SCENARIOS}
         current={scenarioId}
@@ -99,6 +100,8 @@ export function IceSimulator() {
       />
 
       <ScenarioSummary scenario={scenario} />
+
+      <EntityLegend />
 
       <Controls
         playing={playing}
@@ -115,11 +118,16 @@ export function IceSimulator() {
         }}
       />
 
-      <NetworkDiagram
-        scenario={scenario}
-        state={state}
-        event={currentEvent}
-      />
+      <div className="grid md:grid-cols-3 gap-5">
+        <div className="md:col-span-2">
+          <NetworkDiagram
+            scenario={scenario}
+            state={state}
+            event={currentEvent}
+          />
+        </div>
+        <PacketInspector event={currentEvent} />
+      </div>
 
       <CurrentStepCard
         event={currentEvent}
@@ -135,6 +143,23 @@ export function IceSimulator() {
   );
 }
 
+function ScenarioPickerHeader() {
+  return (
+    <div className="text-xs text-slate-500">
+      <strong className="text-slate-700">Why four scenarios?</strong> Same ICE
+      algorithm, four different network topologies — pick one to watch how the
+      same code produces different outcomes (and different failure modes).
+    </div>
+  );
+}
+
+const SCENARIO_TAGLINES: Record<string, string> = {
+  lan: "Best case — both peers on the same Wi-Fi. Host pair wins.",
+  cone: "Typical internet call — different networks, friendly NATs. Direct P2P.",
+  hairpin: "Same router, no hairpin. Direct paths fail; TURN saves it.",
+  symmetric: "CGNAT or strict firewall. STUN's address is useless; TURN required.",
+};
+
 function ScenarioPicker({
   scenarios,
   current,
@@ -145,7 +170,7 @@ function ScenarioPicker({
   onPick: (id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
       {scenarios.map((s) => {
         const active = s.id === current;
         return (
@@ -158,11 +183,16 @@ function ScenarioPicker({
                 : "bg-white border-slate-200 hover:border-ice-400 text-slate-700"
             }`}
           >
-            <div className="font-semibold mb-0.5">{s.name}</div>
+            <div className="font-semibold mb-1">{s.name}</div>
             <div
-              className={`text-[10px] ${active ? "text-ice-100" : "text-slate-500"}`}
+              className={`text-[10px] mb-1.5 leading-snug ${active ? "text-ice-50" : "text-slate-600"}`}
             >
-              Outcome: {outcomeLabel(s.outcome)}
+              {SCENARIO_TAGLINES[s.id] ?? ""}
+            </div>
+            <div
+              className={`text-[10px] ${active ? "text-ice-100" : "text-slate-400"}`}
+            >
+              Result: {outcomeLabel(s.outcome)}
             </div>
           </button>
         );
@@ -801,6 +831,218 @@ function NetworkDiagram({
   );
 }
 
+function EntityLegend() {
+  return (
+    <details className="border border-slate-200 rounded-lg bg-white p-3 text-sm">
+      <summary className="cursor-pointer font-semibold text-slate-800 hover:text-ice-700">
+        What do the boxes mean? (click to expand)
+      </summary>
+      <div className="grid sm:grid-cols-2 gap-3 mt-3 text-xs text-slate-700">
+        <LegendItem
+          color="bg-blue-500"
+          name="STUN server"
+          body="A simple echo service. You send a packet, it tells you what public IP and port it saw — that becomes your srflx candidate. No state, no auth in the basic case. Run by Google, Cloudflare, etc."
+        />
+        <LegendItem
+          color="bg-amber-500"
+          name="TURN server"
+          body="A relay. When peers can't connect directly, both peers send packets to TURN and it forwards them. Requires auth, costs bandwidth, but works through anything."
+        />
+        <LegendItem
+          color="bg-slate-500"
+          name="Signaling server"
+          body="App-controlled, NOT part of ICE. Carries the SDP (with candidate lists) between peers — usually a WebSocket. You build this; ICE doesn't define it."
+        />
+        <LegendItem
+          color="bg-orange-300"
+          name="NAT (cone)"
+          body="Friendly NAT. Once you send out to anyone, anyone can send back to that same mapping. Standard for home routers when working well."
+        />
+        <LegendItem
+          color="bg-orange-300"
+          name="NAT (symmetric)"
+          body="Strict NAT. Picks a different public port for every destination. STUN's reported address is useless to peers because they'd reach the NAT from a different destination address. TURN required."
+        />
+        <LegendItem
+          color="bg-orange-300"
+          name="NAT (no hairpin)"
+          body="A NAT that won't bounce a packet sent from inside to its own public IP back into the LAN. Two devices behind the same router can't reach each other via srflx; needs TURN."
+        />
+        <LegendItem
+          color="bg-ice-500"
+          name="Peer (Alice / Bob)"
+          body="The two browser instances running RTCPeerConnection. Each runs the ICE algorithm independently and arrives at the same selected pair."
+        />
+      </div>
+    </details>
+  );
+}
+
+function LegendItem({
+  color,
+  name,
+  body,
+}: {
+  color: string;
+  name: string;
+  body: string;
+}) {
+  return (
+    <div className="flex gap-2 items-start">
+      <div
+        className={`w-3 h-3 rounded ${color} mt-0.5 flex-shrink-0`}
+        aria-hidden
+      />
+      <div>
+        <div className="font-semibold text-slate-900 text-xs">{name}</div>
+        <p className="text-[11px] text-slate-600 leading-snug">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function PacketInspector({ event }: { event: SimEvent | undefined }) {
+  const packet = event?.packet;
+
+  if (!packet) {
+    return (
+      <div className="border border-slate-200 rounded-lg bg-slate-50 p-4 text-xs text-slate-500 lg:sticky lg:top-4 h-fit">
+        <h3 className="text-sm font-semibold text-slate-700 mb-1">
+          Packet inspector
+        </h3>
+        <p>
+          No packet is in flight this step. When something animates on the
+          canvas, the protocol, addresses, and key fields will show up here.
+        </p>
+      </div>
+    );
+  }
+
+  const protocolColor: Record<string, string> = {
+    STUN: "bg-blue-100 text-blue-800 border-blue-200",
+    TURN: "bg-amber-100 text-amber-800 border-amber-200",
+    SDP: "bg-slate-100 text-slate-800 border-slate-200",
+    ICE: "bg-purple-100 text-purple-800 border-purple-200",
+    DTLS: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    SCTP: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  };
+  const proto = packet.protocol ?? "ICE";
+  const protoClass =
+    protocolColor[proto] ?? "bg-slate-100 text-slate-800 border-slate-200";
+
+  return (
+    <div className="border border-ice-200 rounded-lg bg-white p-4 lg:sticky lg:top-4 h-fit shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <span
+          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${protoClass}`}
+        >
+          {proto}
+        </span>
+        <h3 className="text-sm font-semibold text-slate-900">
+          Packet in flight
+        </h3>
+      </div>
+
+      {packet.protocolDetail && (
+        <div className="text-xs font-medium text-slate-800 mb-2">
+          {packet.protocolDetail}
+        </div>
+      )}
+
+      {(packet.fromAddr || packet.toAddr) && (
+        <div className="text-[11px] font-mono space-y-0.5 mb-3 bg-slate-50 border border-slate-200 rounded p-2">
+          {packet.fromAddr && (
+            <div>
+              <span className="text-slate-500">from </span>
+              <span className="text-slate-800">{packet.fromAddr}</span>
+            </div>
+          )}
+          {packet.toAddr && (
+            <div>
+              <span className="text-slate-500">to&nbsp;&nbsp; </span>
+              <span className="text-slate-800">{packet.toAddr}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {packet.fields && packet.fields.length > 0 && (
+        <div className="mb-3">
+          <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+            Key fields
+          </div>
+          <dl className="space-y-1.5">
+            {packet.fields.map((f, i) => (
+              <div key={i} className="text-[11px]">
+                <dt className="font-mono text-slate-600">{f.name}</dt>
+                <dd className="font-mono text-slate-900 ml-3 break-all">
+                  {f.value}
+                </dd>
+                {f.hint && (
+                  <dd className="ml-3 text-[10px] text-slate-500 italic">
+                    {f.hint}
+                  </dd>
+                )}
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {packet.purpose && (
+        <div className="border-t border-slate-100 pt-2">
+          <div className="text-[10px] uppercase tracking-wide text-ice-700 font-semibold mb-1">
+            What this does
+          </div>
+          <p className="text-[11px] text-slate-700 leading-relaxed">
+            {packet.purpose}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PairStateLegend() {
+  const states: { state: SimPair["state"]; desc: string }[] = [
+    {
+      state: "frozen",
+      desc: "Waiting for a higher-priority pair on the same network interface to finish first.",
+    },
+    {
+      state: "waiting",
+      desc: "Queued. Will be checked on the next pacing tick (Ta, ~50ms).",
+    },
+    {
+      state: "in-progress",
+      desc: "STUN binding request sent, waiting for response.",
+    },
+    {
+      state: "succeeded",
+      desc: "Response received. Pair is usable; eligible for nomination.",
+    },
+    {
+      state: "failed",
+      desc: "No response after retries, or the pair was pruned (e.g. unroutable).",
+    },
+  ];
+  return (
+    <details className="mt-3 text-xs">
+      <summary className="cursor-pointer text-slate-500 hover:text-slate-900">
+        What do the pair states mean?
+      </summary>
+      <ul className="mt-2 space-y-1.5">
+        {states.map((s) => (
+          <li key={s.state} className="flex items-start gap-2">
+            <PairStateBadge state={s.state} />
+            <span className="text-slate-600">{s.desc}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function CurrentStepCard({
   event,
   index,
@@ -883,6 +1125,7 @@ function PairsPanel({ state }: { state: SimState }) {
       <h3 className="text-sm font-semibold text-slate-900 mb-3">
         Candidate pairs
       </h3>
+      <PairStateLegend />
       {state.pairs.length === 0 ? (
         <div className="text-[11px] text-slate-400 italic">
           Pairs are formed after signaling.
