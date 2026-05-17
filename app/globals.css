@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 248 250 252;
+  --foreground: 15 23 42;
+}
+
+body {
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+.code-block {
+  @apply font-mono text-xs bg-slate-900 text-slate-100 rounded-md p-3 overflow-x-auto;
+}
+
+.candidate-badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono;
+}
