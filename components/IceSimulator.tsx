@@ -286,120 +286,268 @@ function NetworkDiagram({
   event: SimEvent | undefined;
 }) {
   const packet = event?.packet;
+  const topo = scenario.topology;
+  const shared = !!topo.natShared && !!topo.a.behind && !!topo.b.behind;
 
-  // Map endpoints to x-coordinates for the packet path
-  const x = {
-    A: 80,
-    B: 720,
-    stun: 400,
-    turn: 400,
-    signal: 400,
+  // --- Layout coordinates (viewBox 800 × 380) ---
+  // Top band: servers (y=30)
+  // Middle band: internet cloud (y=70–170)
+  // Lower-middle band: NAT layer (y=215–265)
+  // Bottom band: peers (y=290–370)
+
+  const serverY = 30;
+  const stunX = 320;
+  const turnX = 400;
+  const signalX = 480;
+
+  const cloud = { x: 130, y: 70, w: 540, h: 100 };
+
+  const peerWidth = 130;
+  const peerHeight = 80;
+  const peerY = 290;
+  const peerA = { x: 20, cx: 20 + peerWidth / 2, top: peerY };
+  const peerB = { x: 650, cx: 650 + peerWidth / 2, top: peerY };
+
+  // NAT positions
+  const natWidth = 100;
+  const natHeight = 50;
+  const natY = 215;
+  // Separate NATs sit between peer and cloud horizontally
+  const natA = topo.a.behind && !shared ? { x: 160, cx: 160 + natWidth / 2 } : null;
+  const natB = topo.b.behind && !shared ? { x: 540, cx: 540 + natWidth / 2 } : null;
+  // Shared NAT sits centered between the two peers
+  const natShared = shared ? { x: 350, cx: 400 } : null;
+
+  // Helper: endpoint coords for packet animation
+  const endpointXY = (key: "A" | "B" | "stun" | "turn" | "signal") => {
+    if (key === "A") return { x: peerA.cx, y: peerY };
+    if (key === "B") return { x: peerB.cx, y: peerY };
+    if (key === "stun") return { x: stunX, y: serverY };
+    if (key === "turn") return { x: turnX, y: serverY };
+    return { x: signalX, y: serverY };
   };
-  const y = {
-    A: 180,
-    B: 180,
-    stun: 60,
-    turn: 60,
-    signal: 60,
-  };
+  const from = packet ? endpointXY(packet.from) : null;
+  const to = packet ? endpointXY(packet.to) : null;
 
   return (
     <div className="border border-slate-200 rounded-lg bg-white p-4 overflow-x-auto">
       <svg
-        viewBox="0 0 800 280"
+        viewBox="0 0 800 380"
         className="w-full max-w-3xl mx-auto"
-        style={{ minWidth: 600 }}
+        style={{ minWidth: 640 }}
       >
         {/* Internet cloud background */}
         <rect
-          x="160"
-          y="90"
-          width="480"
-          height="120"
-          rx="60"
+          x={cloud.x}
+          y={cloud.y}
+          width={cloud.w}
+          height={cloud.h}
+          rx={50}
           fill="#f1f5f9"
           stroke="#cbd5e1"
           strokeDasharray="4 4"
         />
         <text
-          x="400"
-          y="105"
+          x={cloud.x + cloud.w / 2}
+          y={cloud.y + cloud.h - 8}
           textAnchor="middle"
-          className="fill-slate-400"
-          style={{ fontSize: 9 }}
+          style={{ fontSize: 9, fontWeight: 600 }}
+          fill="#94a3b8"
         >
           INTERNET
         </text>
 
-        {/* STUN server */}
+        {/* Servers inside the cloud */}
         <ServerIcon
-          x={330}
-          y={40}
+          x={stunX}
+          y={serverY + 80}
           label="STUN"
           color="#3b82f6"
           highlighted={packet?.from === "stun" || packet?.to === "stun"}
         />
-        {/* TURN server */}
         <ServerIcon
-          x={400}
-          y={40}
+          x={turnX}
+          y={serverY + 80}
           label="TURN"
           color="#f59e0b"
           highlighted={packet?.from === "turn" || packet?.to === "turn"}
         />
-        {/* Signaling server */}
         <ServerIcon
-          x={470}
-          y={40}
+          x={signalX}
+          y={serverY + 80}
           label="Signal"
           color="#94a3b8"
           highlighted={packet?.from === "signal" || packet?.to === "signal"}
         />
 
-        {/* NAT boxes (if applicable) */}
-        {scenario.topology.a.behind && (
+        {/* Connection lines */}
+        {shared ? (
+          <>
+            {/* Cloud → shared NAT */}
+            <line
+              x1={400}
+              y1={cloud.y + cloud.h}
+              x2={400}
+              y2={natY}
+              stroke="#cbd5e1"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+            />
+            {/* Shared NAT → Peer A (diagonal) */}
+            <line
+              x1={natShared!.cx - 30}
+              y1={natY + natHeight}
+              x2={peerA.cx}
+              y2={peerY}
+              stroke="#cbd5e1"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+            />
+            {/* Shared NAT → Peer B (diagonal) */}
+            <line
+              x1={natShared!.cx + 30}
+              y1={natY + natHeight}
+              x2={peerB.cx}
+              y2={peerY}
+              stroke="#cbd5e1"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+            />
+          </>
+        ) : (
+          <>
+            {/* Side A line */}
+            {natA ? (
+              <>
+                <line
+                  x1={natA.cx}
+                  y1={cloud.y + cloud.h}
+                  x2={natA.cx}
+                  y2={natY}
+                  stroke="#cbd5e1"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                />
+                <line
+                  x1={natA.cx}
+                  y1={natY + natHeight}
+                  x2={peerA.cx}
+                  y2={peerY}
+                  stroke="#cbd5e1"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                />
+              </>
+            ) : (
+              <line
+                x1={peerA.cx}
+                y1={peerY}
+                x2={peerA.cx}
+                y2={cloud.y + cloud.h}
+                stroke="#cbd5e1"
+                strokeWidth={1.5}
+                strokeDasharray="3 3"
+              />
+            )}
+
+            {/* Side B line */}
+            {natB ? (
+              <>
+                <line
+                  x1={natB.cx}
+                  y1={cloud.y + cloud.h}
+                  x2={natB.cx}
+                  y2={natY}
+                  stroke="#cbd5e1"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                />
+                <line
+                  x1={natB.cx}
+                  y1={natY + natHeight}
+                  x2={peerB.cx}
+                  y2={peerY}
+                  stroke="#cbd5e1"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                />
+              </>
+            ) : (
+              <line
+                x1={peerB.cx}
+                y1={peerY}
+                x2={peerB.cx}
+                y2={cloud.y + cloud.h}
+                stroke="#cbd5e1"
+                strokeWidth={1.5}
+                strokeDasharray="3 3"
+              />
+            )}
+          </>
+        )}
+
+        {/* NAT boxes */}
+        {natA && (
           <NatBox
-            x={160}
-            y={150}
-            label={scenario.topology.a.behind}
-            ip={scenario.topology.publicA ?? ""}
+            x={natA.x}
+            y={natY}
+            width={natWidth}
+            height={natHeight}
+            label={topo.a.behind!}
+            ip={topo.publicA ?? ""}
           />
         )}
-        {scenario.topology.b.behind && (
+        {natB && (
           <NatBox
-            x={560}
-            y={150}
-            label={scenario.topology.b.behind}
-            ip={scenario.topology.publicB ?? ""}
+            x={natB.x}
+            y={natY}
+            width={natWidth}
+            height={natHeight}
+            label={topo.b.behind!}
+            ip={topo.publicB ?? ""}
+          />
+        )}
+        {natShared && (
+          <NatBox
+            x={natShared.x}
+            y={natY}
+            width={natWidth}
+            height={natHeight}
+            label={topo.a.behind!}
+            ip={topo.publicA ?? ""}
+            sharedLabel
           />
         )}
 
-        {/* Peer A */}
+        {/* Peers */}
         <PeerBox
-          x={20}
-          y={140}
+          x={peerA.x}
+          y={peerY}
+          width={peerWidth}
+          height={peerHeight}
           label="Alice"
-          ip={scenario.topology.a.ip}
+          ip={topo.a.ip}
           candidateCount={state.candidates.filter((c) => c.side === "A").length}
           glow={packet?.from === "A" || packet?.to === "A"}
         />
-        {/* Peer B */}
         <PeerBox
-          x={660}
-          y={140}
+          x={peerB.x}
+          y={peerY}
+          width={peerWidth}
+          height={peerHeight}
           label="Bob"
-          ip={scenario.topology.b.ip}
+          ip={topo.b.ip}
           candidateCount={state.candidates.filter((c) => c.side === "B").length}
           glow={packet?.from === "B" || packet?.to === "B"}
         />
 
         {/* Animated packet */}
-        {packet && (
+        {packet && from && to && (
           <PacketAnimation
-            x1={x[packet.from]}
-            y1={y[packet.from]}
-            x2={x[packet.to]}
-            y2={y[packet.to]}
+            x1={from.x}
+            y1={from.y}
+            x2={to.x}
+            y2={to.y}
             label={packet.label}
           />
         )}
@@ -449,13 +597,19 @@ function ServerIcon({
 function NatBox({
   x,
   y,
+  width = 80,
+  height = 50,
   label,
   ip,
+  sharedLabel,
 }: {
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   label: string;
   ip: string;
+  sharedLabel?: boolean;
 }) {
   const labelText =
     label === "cone"
@@ -468,24 +622,24 @@ function NatBox({
       <rect
         x={x}
         y={y}
-        width={80}
-        height={50}
+        width={width}
+        height={height}
         rx={4}
         fill="#fff7ed"
         stroke="#fdba74"
       />
       <text
-        x={x + 40}
-        y={y + 18}
+        x={x + width / 2}
+        y={y + 17}
         textAnchor="middle"
-        style={{ fontSize: 9, fontWeight: 600 }}
+        style={{ fontSize: 10, fontWeight: 600 }}
         fill="#9a3412"
       >
-        {labelText}
+        {sharedLabel ? "Shared router" : labelText}
       </text>
       <text
-        x={x + 40}
-        y={y + 36}
+        x={x + width / 2}
+        y={y + 32}
         textAnchor="middle"
         style={{ fontSize: 9 }}
         fill="#9a3412"
@@ -493,6 +647,17 @@ function NatBox({
       >
         {ip}
       </text>
+      {sharedLabel && (
+        <text
+          x={x + width / 2}
+          y={y + 45}
+          textAnchor="middle"
+          style={{ fontSize: 8 }}
+          fill="#9a3412"
+        >
+          {labelText}
+        </text>
+      )}
     </g>
   );
 }
@@ -500,6 +665,8 @@ function NatBox({
 function PeerBox({
   x,
   y,
+  width = 120,
+  height = 70,
   label,
   ip,
   candidateCount,
@@ -507,6 +674,8 @@ function PeerBox({
 }: {
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   label: string;
   ip: string;
   candidateCount: number;
@@ -517,25 +686,25 @@ function PeerBox({
       <rect
         x={x}
         y={y}
-        width={120}
-        height={70}
+        width={width}
+        height={height}
         rx={6}
         fill="white"
         stroke={glow ? "#0284c7" : "#cbd5e1"}
         strokeWidth={glow ? 2 : 1}
       />
       <text
-        x={x + 60}
-        y={y + 20}
+        x={x + width / 2}
+        y={y + 22}
         textAnchor="middle"
-        style={{ fontSize: 12, fontWeight: 700 }}
+        style={{ fontSize: 13, fontWeight: 700 }}
         fill="#0f172a"
       >
         {label}
       </text>
       <text
-        x={x + 60}
-        y={y + 38}
+        x={x + width / 2}
+        y={y + 42}
         textAnchor="middle"
         style={{ fontSize: 10 }}
         fill="#64748b"
@@ -544,8 +713,8 @@ function PeerBox({
         {ip}
       </text>
       <text
-        x={x + 60}
-        y={y + 56}
+        x={x + width / 2}
+        y={y + 62}
         textAnchor="middle"
         style={{ fontSize: 9 }}
         fill="#0284c7"
