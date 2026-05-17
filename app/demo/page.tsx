@@ -19,15 +19,19 @@ export default function DemoPage() {
         </p>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
-        <strong>Heads up:</strong> Signaling here is copy-paste. In a real app
-        this would happen over WebSocket. The demo also uses only public STUN
-        servers — no TURN — so connections may fail across symmetric NATs.
-        That's exactly the point of the{" "}
-        <a href="/limitations" className="underline">
-          limitations page
-        </a>
-        .
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900 space-y-2">
+        <p>
+          <strong>Heads up:</strong> Signaling is copy-paste (real apps use
+          WebSocket). By default, this demo uses public Google STUN + a free
+          public TURN server (Open Relay) so it works even when both peers
+          share a NAT or one sits behind a symmetric NAT.
+        </p>
+        <p className="text-xs">
+          <strong>Two devices on your LAN not connecting?</strong> That's
+          usually mDNS host candidates not resolving across devices over HTTP
+          plus your router not supporting hairpin NAT. Keep TURN enabled — the
+          selected pair will show as <code>relay</code>.
+        </p>
       </div>
 
       <ICEDemo />

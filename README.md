@@ -28,7 +28,30 @@ Then open <http://localhost:3000>.
 4. In tab A, paste the answer and click **Apply answer**.
 5. When the peer state reads `connected`, type into the chat — messages flow over the WebRTC data channel directly, peer-to-peer.
 
-If the connection sits in `checking` and never goes to `connected`, your network is one of the cases the [Limitations](http://localhost:3000/limitations) page describes. Most often: symmetric NAT with no TURN server configured.
+If the connection sits in `checking` and never goes to `connected`, see the troubleshooting section below.
+
+### Cross-device on the same LAN (most common failure)
+
+The dev server already binds to all interfaces — Next prints both `http://localhost:3000` and `http://<your-lan-ip>:3000` on startup. Open the LAN URL on the second device.
+
+If the page loads on both devices but the peer connection never reaches `connected`, the failure mode is almost always one of these:
+
+1. **mDNS host candidates can't resolve cross-device over HTTP.** Chrome emits `xxx.local` candidates instead of raw IPs (for privacy). Resolution depends on the OS, and is sometimes restricted on non-secure (HTTP) origins.
+2. **No NAT hairpinning.** Both peers' STUN-reflexive candidates point at the same public IP (your home router). Some consumer routers refuse to bounce packets from inside back through their public IP.
+
+**Fix:** Leave the **Use free TURN** toggle on (default). Traffic falls back to a public TURN relay, the selected candidate pair shows as `relay`, and the chat works. For production you'd run your own TURN server.
+
+### macOS firewall
+
+If the LAN URL doesn't load at all from the second device:
+
+```bash
+# Allow node through the firewall
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add $(which node)
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp $(which node)
+```
+
+Or temporarily: System Settings → Network → Firewall → off.
 
 ## How it works
 

@@ -20,6 +20,26 @@ export const PUBLIC_STUN_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.cloudflare.com:3478" },
 ];
 
+// Open Relay Project — a free public TURN server suitable for demos.
+// Do NOT rely on this in production: no SLA, shared bandwidth.
+// Docs: https://www.metered.ca/tools/openrelay/
+export const OPEN_RELAY_TURN_SERVERS: RTCIceServer[] = [
+  {
+    urls: [
+      "turn:openrelay.metered.ca:80",
+      "turn:openrelay.metered.ca:443",
+      "turn:openrelay.metered.ca:443?transport=tcp",
+    ],
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+];
+
+export const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  ...PUBLIC_STUN_SERVERS,
+  ...OPEN_RELAY_TURN_SERVERS,
+];
+
 export function parseCandidate(candidateStr: string): ParsedCandidate {
   // Format:
   // candidate:foundation component protocol priority address port typ type [raddr X rport Y] [generation Z] ...
@@ -96,12 +116,75 @@ export const CANDIDATE_TYPE_INFO: Record<CandidateType, CandidateTypeInfo> = {
 };
 
 export function createPeerConnection(
-  iceServers: RTCIceServer[] = PUBLIC_STUN_SERVERS,
+  iceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS,
 ): RTCPeerConnection {
   return new RTCPeerConnection({
     iceServers,
     iceCandidatePoolSize: 0,
   });
+}
+
+export interface SelectedPair {
+  local: ParsedCandidate | null;
+  remote: ParsedCandidate | null;
+  state: string;
+  bytesSent: number;
+  bytesReceived: number;
+}
+
+export async function getSelectedCandidatePair(
+  pc: RTCPeerConnection,
+): Promise<SelectedPair | null> {
+  const stats = await pc.getStats();
+  let selectedPairId: string | null = null;
+  const candidates = new Map<string, any>();
+  const pairs = new Map<string, any>();
+
+  stats.forEach((report) => {
+    if (report.type === "transport" && report.selectedCandidatePairId) {
+      selectedPairId = report.selectedCandidatePairId;
+    }
+    if (report.type === "candidate-pair") {
+      pairs.set(report.id, report);
+      if (report.nominated && report.state === "succeeded" && !selectedPairId) {
+        selectedPairId = report.id;
+      }
+    }
+    if (
+      report.type === "local-candidate" ||
+      report.type === "remote-candidate"
+    ) {
+      candidates.set(report.id, report);
+    }
+  });
+
+  if (!selectedPairId) return null;
+  const pair = pairs.get(selectedPairId);
+  if (!pair) return null;
+
+  const buildCandidate = (id: string | undefined): ParsedCandidate | null => {
+    if (!id) return null;
+    const c = candidates.get(id);
+    if (!c) return null;
+    return {
+      raw: "",
+      foundation: c.foundation ?? "",
+      component: "1",
+      protocol: c.protocol ?? "",
+      priority: String(c.priority ?? ""),
+      address: c.address ?? c.ip ?? "",
+      port: String(c.port ?? ""),
+      type: (c.candidateType ?? "unknown") as CandidateType,
+    };
+  };
+
+  return {
+    local: buildCandidate(pair.localCandidateId),
+    remote: buildCandidate(pair.remoteCandidateId),
+    state: pair.state ?? "unknown",
+    bytesSent: pair.bytesSent ?? 0,
+    bytesReceived: pair.bytesReceived ?? 0,
+  };
 }
 
 export type SignalingPayload =

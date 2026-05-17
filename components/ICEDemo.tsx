@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   createPeerConnection,
+  DEFAULT_ICE_SERVERS,
   decodeSignal,
   encodeSignal,
+  getSelectedCandidatePair,
+  OPEN_RELAY_TURN_SERVERS,
   PUBLIC_STUN_SERVERS,
+  type SelectedPair,
 } from "@/lib/webrtc";
+import { CandidateBadge } from "./CandidateBadge";
 import { CandidateList } from "./CandidateList";
 
 type Role = "offerer" | "answerer" | null;
@@ -30,6 +35,11 @@ export function ICEDemo() {
   >([]);
   const [draft, setDraft] = useState("");
   const [log, setLog] = useState<string[]>([]);
+  const [useTurn, setUseTurn] = useState(true);
+  const [customTurnUrl, setCustomTurnUrl] = useState("");
+  const [customTurnUser, setCustomTurnUser] = useState("");
+  const [customTurnCred, setCustomTurnCred] = useState("");
+  const [selectedPair, setSelectedPair] = useState<SelectedPair | null>(null);
 
   function addLog(line: string) {
     setLog((l) => [
@@ -39,12 +49,23 @@ export function ICEDemo() {
   }
 
   function setupConnection() {
-    const pc = createPeerConnection(PUBLIC_STUN_SERVERS);
+    const iceServers: RTCIceServer[] = [...PUBLIC_STUN_SERVERS];
+    if (useTurn) iceServers.push(...OPEN_RELAY_TURN_SERVERS);
+    if (customTurnUrl.trim()) {
+      iceServers.push({
+        urls: customTurnUrl.trim(),
+        username: customTurnUser.trim() || undefined,
+        credential: customTurnCred.trim() || undefined,
+      });
+    }
+    const pc = createPeerConnection(iceServers);
     pcRef.current = pc;
     setCandidates([]);
+    setSelectedPair(null);
     setGatheringState(pc.iceGatheringState);
     setConnState(pc.connectionState);
     setIceState(pc.iceConnectionState);
+    addLog(`ice servers: ${iceServers.length} (turn ${useTurn ? "on" : "off"})`);
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -63,12 +84,26 @@ export function ICEDemo() {
     pc.onconnectionstatechange = () => {
       setConnState(pc.connectionState);
       addLog(`peer: ${pc.connectionState}`);
+      if (pc.connectionState === "connected") {
+        void refreshSelectedPair();
+      }
     };
     pc.ondatachannel = (e) => {
       attachDataChannel(e.channel);
     };
 
     return pc;
+  }
+
+  async function refreshSelectedPair() {
+    const pc = pcRef.current;
+    if (!pc) return;
+    try {
+      const pair = await getSelectedCandidatePair(pc);
+      if (pair) setSelectedPair(pair);
+    } catch {
+      // ignore
+    }
   }
 
   function attachDataChannel(dc: RTCDataChannel) {
@@ -160,6 +195,12 @@ export function ICEDemo() {
     };
   }, []);
 
+  useEffect(() => {
+    if (connState !== "connected") return;
+    const id = setInterval(refreshSelectedPair, 2000);
+    return () => clearInterval(id);
+  }, [connState]);
+
   return (
     <div className="space-y-6">
       <StateBar
@@ -170,20 +211,32 @@ export function ICEDemo() {
       />
 
       {role === null && (
-        <div className="grid md:grid-cols-2 gap-4">
-          <RoleCard
-            title="Peer A (Offerer)"
-            description="Start here on one tab. Creates an offer SDP — copy it to Peer B."
-            buttonLabel="Create offer"
-            onClick={startAsOfferer}
+        <>
+          <IceConfigPanel
+            useTurn={useTurn}
+            setUseTurn={setUseTurn}
+            customTurnUrl={customTurnUrl}
+            setCustomTurnUrl={setCustomTurnUrl}
+            customTurnUser={customTurnUser}
+            setCustomTurnUser={setCustomTurnUser}
+            customTurnCred={customTurnCred}
+            setCustomTurnCred={setCustomTurnCred}
           />
-          <RoleCard
-            title="Peer B (Answerer)"
-            description="Open this in another tab or device. Paste the offer to generate an answer."
-            buttonLabel="I have an offer"
-            onClick={() => setRole("answerer")}
-          />
-        </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <RoleCard
+              title="Peer A (Offerer)"
+              description="Start here on one tab. Creates an offer SDP — copy it to Peer B."
+              buttonLabel="Create offer"
+              onClick={startAsOfferer}
+            />
+            <RoleCard
+              title="Peer B (Answerer)"
+              description="Open this in another tab or device. Paste the offer to generate an answer."
+              buttonLabel="I have an offer"
+              onClick={() => setRole("answerer")}
+            />
+          </div>
+        </>
       )}
 
       {role !== null && (
@@ -215,6 +268,12 @@ export function ICEDemo() {
               onSend={sendMessage}
             />
 
+            <SelectedPairCard
+              pair={selectedPair}
+              iceState={iceState}
+              useTurn={useTurn}
+            />
+
             <EventLog log={log} />
           </div>
         </div>
@@ -242,11 +301,11 @@ function waitForGatheringComplete(pc: RTCPeerConnection): Promise<void> {
       }
     };
     pc.addEventListener("icegatheringstatechange", check);
-    // Most browsers finish gathering in <3s; fall back after 5s
+    // TURN allocation can take a few seconds. Cap at 12s to avoid hanging.
     setTimeout(() => {
       pc.removeEventListener("icegatheringstatechange", check);
       resolve();
-    }, 5000);
+    }, 12000);
   });
 }
 
@@ -448,6 +507,209 @@ function ChatPanel({
         >
           Send
         </button>
+      </div>
+    </div>
+  );
+}
+
+function IceConfigPanel({
+  useTurn,
+  setUseTurn,
+  customTurnUrl,
+  setCustomTurnUrl,
+  customTurnUser,
+  setCustomTurnUser,
+  customTurnCred,
+  setCustomTurnCred,
+}: {
+  useTurn: boolean;
+  setUseTurn: (v: boolean) => void;
+  customTurnUrl: string;
+  setCustomTurnUrl: (v: string) => void;
+  customTurnUser: string;
+  setCustomTurnUser: (v: string) => void;
+  customTurnCred: string;
+  setCustomTurnCred: (v: string) => void;
+}) {
+  return (
+    <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">
+            ICE servers
+          </h3>
+          <p className="text-xs text-slate-600">
+            STUN reveals your public IP. TURN relays traffic when direct paths
+            fail — needed when both peers share a NAT that doesn't support
+            hairpin, or across symmetric NATs.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useTurn}
+            onChange={(e) => setUseTurn(e.target.checked)}
+            className="w-4 h-4 accent-ice-600"
+          />
+          <span className="font-medium text-slate-700">
+            Use free TURN (Open Relay)
+          </span>
+        </label>
+      </div>
+
+      <details className="border-t border-slate-100 pt-3">
+        <summary className="text-xs text-slate-600 cursor-pointer hover:text-slate-900">
+          Add your own TURN server (recommended — public TURN is flaky)
+        </summary>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 text-xs">
+          <input
+            type="text"
+            value={customTurnUrl}
+            onChange={(e) => setCustomTurnUrl(e.target.value)}
+            placeholder="turn:turn.example.com:3478"
+            className="border border-slate-200 rounded-md px-2 py-1.5 font-mono"
+          />
+          <input
+            type="text"
+            value={customTurnUser}
+            onChange={(e) => setCustomTurnUser(e.target.value)}
+            placeholder="username"
+            className="border border-slate-200 rounded-md px-2 py-1.5 font-mono"
+          />
+          <input
+            type="text"
+            value={customTurnCred}
+            onChange={(e) => setCustomTurnCred(e.target.value)}
+            placeholder="credential"
+            className="border border-slate-200 rounded-md px-2 py-1.5 font-mono"
+          />
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">
+          Get free credentials from{" "}
+          <a
+            href="https://www.metered.ca/tools/openrelay/"
+            target="_blank"
+            rel="noopener"
+            className="underline"
+          >
+            metered.ca
+          </a>{" "}
+          or{" "}
+          <a
+            href="https://www.twilio.com/docs/stun-turn"
+            target="_blank"
+            rel="noopener"
+            className="underline"
+          >
+            Twilio NTS
+          </a>
+          . Applies on the next "Create offer" / "Generate answer".
+        </p>
+      </details>
+    </div>
+  );
+}
+
+function SelectedPairCard({
+  pair,
+  iceState,
+  useTurn,
+}: {
+  pair: SelectedPair | null;
+  iceState: RTCIceConnectionState;
+  useTurn: boolean;
+}) {
+  const isFailed = iceState === "failed" || iceState === "disconnected";
+
+  if (isFailed) {
+    return (
+      <div className="border border-rose-200 bg-rose-50 rounded-lg p-4 text-sm text-rose-900">
+        <h3 className="font-semibold mb-1">Connection failed</h3>
+        <p className="mb-2">
+          ICE could not find a working path between the peers. Common causes:
+        </p>
+        <ul className="list-disc list-inside space-y-0.5 text-xs">
+          <li>
+            Both peers behind the same NAT that doesn't hairpin{" "}
+            {useTurn ? "(should be solved by TURN)" : "— try enabling TURN"}
+          </li>
+          <li>
+            Chrome's mDNS host candidates can't resolve across devices on HTTP
+          </li>
+          <li>One or both peers behind symmetric NAT (CGNAT, enterprise FW)</li>
+          <li>STUN/TURN server unreachable</li>
+        </ul>
+      </div>
+    );
+  }
+
+  if (!pair) {
+    return (
+      <div className="border border-slate-200 rounded-lg p-4 bg-white">
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">
+          Selected candidate pair
+        </h3>
+        <p className="text-xs text-slate-500 italic">
+          Will appear once connectivity checks succeed.
+        </p>
+      </div>
+    );
+  }
+
+  const isRelay =
+    pair.local?.type === "relay" || pair.remote?.type === "relay";
+
+  return (
+    <div className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-emerald-900">
+          Selected candidate pair
+        </h3>
+        {isRelay && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+            Relayed via TURN
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="bg-white rounded-md p-2 border border-slate-200">
+          <div className="text-[10px] uppercase text-slate-500 mb-1">Local</div>
+          {pair.local && (
+            <>
+              <div className="flex items-center gap-1.5 mb-1">
+                <CandidateBadge type={pair.local.type} />
+              </div>
+              <div className="font-mono text-slate-700">
+                {pair.local.address}:{pair.local.port}
+              </div>
+              <div className="text-[10px] text-slate-500 uppercase mt-0.5">
+                {pair.local.protocol}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="bg-white rounded-md p-2 border border-slate-200">
+          <div className="text-[10px] uppercase text-slate-500 mb-1">
+            Remote
+          </div>
+          {pair.remote && (
+            <>
+              <div className="flex items-center gap-1.5 mb-1">
+                <CandidateBadge type={pair.remote.type} />
+              </div>
+              <div className="font-mono text-slate-700">
+                {pair.remote.address}:{pair.remote.port}
+              </div>
+              <div className="text-[10px] text-slate-500 uppercase mt-0.5">
+                {pair.remote.protocol}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="mt-2 flex gap-4 text-[10px] text-slate-600">
+        <span>↑ {pair.bytesSent} B</span>
+        <span>↓ {pair.bytesReceived} B</span>
       </div>
     </div>
   );
