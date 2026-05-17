@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SCENARIOS,
+  type NatKind,
   type Scenario,
   type SimCandidate,
   type SimEvent,
@@ -276,6 +277,456 @@ function Controls({
   );
 }
 
+// ============================================================================
+// Canvas-based network diagram
+// ============================================================================
+
+const LOGICAL_W = 800;
+const LOGICAL_H = 380;
+
+type Endpoint = "A" | "B" | "stun" | "turn" | "signal";
+
+interface SceneLayout {
+  cloud: { x: number; y: number; w: number; h: number };
+  servers: Record<"stun" | "turn" | "signal", { x: number; y: number }>;
+  peerA: { x: number; y: number; w: number; h: number; cx: number };
+  peerB: { x: number; y: number; w: number; h: number; cx: number };
+  natA: { x: number; y: number; w: number; h: number; cx: number } | null;
+  natB: { x: number; y: number; w: number; h: number; cx: number } | null;
+  natShared: { x: number; y: number; w: number; h: number; cx: number } | null;
+  endpoint: (k: Endpoint) => { x: number; y: number };
+}
+
+function computeLayout(scenario: Scenario): SceneLayout {
+  const topo = scenario.topology;
+  const shared = !!topo.natShared && !!topo.a.behind && !!topo.b.behind;
+
+  const cloud = { x: 130, y: 70, w: 540, h: 100 };
+  const peerW = 130;
+  const peerH = 80;
+  const peerY = 290;
+  const peerA = { x: 20, y: peerY, w: peerW, h: peerH, cx: 20 + peerW / 2 };
+  const peerB = { x: 650, y: peerY, w: peerW, h: peerH, cx: 650 + peerW / 2 };
+
+  const natW = 100;
+  const natH = 50;
+  const natY = 215;
+
+  const natA =
+    topo.a.behind && !shared
+      ? { x: 160, y: natY, w: natW, h: natH, cx: 160 + natW / 2 }
+      : null;
+  const natB =
+    topo.b.behind && !shared
+      ? { x: 540, y: natY, w: natW, h: natH, cx: 540 + natW / 2 }
+      : null;
+  const natShared = shared
+    ? { x: 350, y: natY, w: natW, h: natH, cx: 400 }
+    : null;
+
+  const servers = {
+    stun: { x: 320, y: 110 },
+    turn: { x: 400, y: 110 },
+    signal: { x: 480, y: 110 },
+  };
+
+  const endpoint = (k: Endpoint) => {
+    if (k === "A") return { x: peerA.cx, y: peerY };
+    if (k === "B") return { x: peerB.cx, y: peerY };
+    return servers[k];
+  };
+
+  return { cloud, servers, peerA, peerB, natA, natB, natShared, endpoint };
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function dashedLine(
+  ctx: CanvasRenderingContext2D,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: string,
+  width = 1.5,
+  dash: [number, number] = [3, 3],
+) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCloud(ctx: CanvasRenderingContext2D, layout: SceneLayout) {
+  const { cloud } = layout;
+  ctx.save();
+  ctx.fillStyle = "#f1f5f9";
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  roundRect(ctx, cloud.x, cloud.y, cloud.w, cloud.h, 50);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "600 9px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("INTERNET", cloud.x + cloud.w / 2, cloud.y + cloud.h - 8);
+}
+
+function drawServer(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  label: string,
+  color: string,
+  highlighted: boolean,
+  pulse: number,
+) {
+  const w = 56;
+  const h = 30;
+  const left = x - w / 2;
+  const top = y - h / 2;
+
+  if (highlighted) {
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12 + pulse * 6;
+  }
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = highlighted ? color : "#cbd5e1";
+  ctx.lineWidth = highlighted ? 2 : 1;
+  roundRect(ctx, left, top, w, h, 4);
+  ctx.fill();
+  ctx.stroke();
+  if (highlighted) ctx.restore();
+
+  ctx.fillStyle = highlighted ? color : "#475569";
+  ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x, y);
+}
+
+function natLabelFor(kind: NatKind) {
+  return kind === "cone"
+    ? "NAT (cone)"
+    : kind === "symmetric"
+      ? "NAT (symmetric)"
+      : "NAT (no hairpin)";
+}
+
+function drawNAT(
+  ctx: CanvasRenderingContext2D,
+  box: { x: number; y: number; w: number; h: number },
+  kind: NatKind,
+  ip: string,
+  shared: boolean,
+) {
+  ctx.fillStyle = "#fff7ed";
+  ctx.strokeStyle = "#fdba74";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  roundRect(ctx, box.x, box.y, box.w, box.h, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  const cx = box.x + box.w / 2;
+  ctx.fillStyle = "#9a3412";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillText(shared ? "Shared router" : natLabelFor(kind), cx, box.y + 14);
+
+  ctx.font = "10px ui-monospace, SFMono-Regular, monospace";
+  ctx.fillText(ip, cx, box.y + 29);
+
+  if (shared) {
+    ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(natLabelFor(kind), cx, box.y + 42);
+  }
+}
+
+function drawPeer(
+  ctx: CanvasRenderingContext2D,
+  box: { x: number; y: number; w: number; h: number },
+  label: string,
+  ip: string,
+  candidateCount: number,
+  glow: boolean,
+  pulse: number,
+) {
+  if (glow) {
+    ctx.save();
+    ctx.shadowColor = "#0284c7";
+    ctx.shadowBlur = 14 + pulse * 8;
+  }
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = glow ? "#0284c7" : "#cbd5e1";
+  ctx.lineWidth = glow ? 2 : 1;
+  ctx.setLineDash([]);
+  roundRect(ctx, box.x, box.y, box.w, box.h, 6);
+  ctx.fill();
+  ctx.stroke();
+  if (glow) ctx.restore();
+
+  const cx = box.x + box.w / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "700 14px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillText(label, cx, box.y + 18);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "11px ui-monospace, SFMono-Regular, monospace";
+  ctx.fillText(ip, cx, box.y + 38);
+
+  ctx.fillStyle = "#0284c7";
+  ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillText(
+    `${candidateCount} candidate${candidateCount === 1 ? "" : "s"}`,
+    cx,
+    box.y + 58,
+  );
+}
+
+function drawConnections(
+  ctx: CanvasRenderingContext2D,
+  layout: SceneLayout,
+) {
+  const cloudBottom = layout.cloud.y + layout.cloud.h;
+
+  if (layout.natShared) {
+    const ns = layout.natShared;
+    dashedLine(ctx, 400, cloudBottom, 400, ns.y, "#cbd5e1");
+    dashedLine(
+      ctx,
+      ns.cx - 30,
+      ns.y + ns.h,
+      layout.peerA.cx,
+      layout.peerA.y,
+      "#cbd5e1",
+    );
+    dashedLine(
+      ctx,
+      ns.cx + 30,
+      ns.y + ns.h,
+      layout.peerB.cx,
+      layout.peerB.y,
+      "#cbd5e1",
+    );
+  } else {
+    // Side A
+    if (layout.natA) {
+      dashedLine(ctx, layout.natA.cx, cloudBottom, layout.natA.cx, layout.natA.y, "#cbd5e1");
+      dashedLine(
+        ctx,
+        layout.natA.cx,
+        layout.natA.y + layout.natA.h,
+        layout.peerA.cx,
+        layout.peerA.y,
+        "#cbd5e1",
+      );
+    } else {
+      dashedLine(
+        ctx,
+        layout.peerA.cx,
+        cloudBottom,
+        layout.peerA.cx,
+        layout.peerA.y,
+        "#cbd5e1",
+      );
+    }
+    // Side B
+    if (layout.natB) {
+      dashedLine(ctx, layout.natB.cx, cloudBottom, layout.natB.cx, layout.natB.y, "#cbd5e1");
+      dashedLine(
+        ctx,
+        layout.natB.cx,
+        layout.natB.y + layout.natB.h,
+        layout.peerB.cx,
+        layout.peerB.y,
+        "#cbd5e1",
+      );
+    } else {
+      dashedLine(
+        ctx,
+        layout.peerB.cx,
+        cloudBottom,
+        layout.peerB.cx,
+        layout.peerB.y,
+        "#cbd5e1",
+      );
+    }
+  }
+}
+
+function drawPacket(
+  ctx: CanvasRenderingContext2D,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  label: string,
+  t: number,
+) {
+  // Faded route line
+  ctx.save();
+  ctx.strokeStyle = "#0284c7";
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+  ctx.restore();
+
+  // Multiple particles moving along the path
+  const period = 1.6; // seconds
+  const particleCount = 3;
+  for (let i = 0; i < particleCount; i++) {
+    const offset = i / particleCount;
+    const phase = ((t / period + offset) % 1);
+    const px = from.x + (to.x - from.x) * phase;
+    const py = from.y + (to.y - from.y) * phase;
+    // Fade in/out at endpoints
+    const alpha = Math.sin(phase * Math.PI);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = "#0284c7";
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "#0284c7";
+    ctx.beginPath();
+    ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Label at midpoint with a small background pill for readability
+  const mx = (from.x + to.x) / 2;
+  const my = (from.y + to.y) / 2 - 10;
+  ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
+  const metrics = ctx.measureText(label);
+  const padX = 6;
+  const padY = 3;
+  const tw = metrics.width + padX * 2;
+  const th = 14 + padY * 2;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.strokeStyle = "rgba(2, 132, 199, 0.3)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  roundRect(ctx, mx - tw / 2, my - th / 2, tw, th, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#0369a1";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, mx, my);
+}
+
+function drawScene(
+  ctx: CanvasRenderingContext2D,
+  scenario: Scenario,
+  state: SimState,
+  event: SimEvent | undefined,
+  t: number,
+) {
+  const layout = computeLayout(scenario);
+  const packet = event?.packet;
+  const pulse = (Math.sin(t * 3) + 1) / 2; // 0..1
+
+  // Layers, bottom to top
+  drawCloud(ctx, layout);
+  drawServer(
+    ctx,
+    layout.servers.stun.x,
+    layout.servers.stun.y,
+    "STUN",
+    "#3b82f6",
+    packet?.from === "stun" || packet?.to === "stun",
+    pulse,
+  );
+  drawServer(
+    ctx,
+    layout.servers.turn.x,
+    layout.servers.turn.y,
+    "TURN",
+    "#f59e0b",
+    packet?.from === "turn" || packet?.to === "turn",
+    pulse,
+  );
+  drawServer(
+    ctx,
+    layout.servers.signal.x,
+    layout.servers.signal.y,
+    "Signal",
+    "#94a3b8",
+    packet?.from === "signal" || packet?.to === "signal",
+    pulse,
+  );
+
+  drawConnections(ctx, layout);
+
+  const topo = scenario.topology;
+  if (layout.natA) drawNAT(ctx, layout.natA, topo.a.behind!, topo.publicA ?? "", false);
+  if (layout.natB) drawNAT(ctx, layout.natB, topo.b.behind!, topo.publicB ?? "", false);
+  if (layout.natShared)
+    drawNAT(ctx, layout.natShared, topo.a.behind!, topo.publicA ?? "", true);
+
+  drawPeer(
+    ctx,
+    layout.peerA,
+    "Alice",
+    topo.a.ip,
+    state.candidates.filter((c) => c.side === "A").length,
+    packet?.from === "A" || packet?.to === "A",
+    pulse,
+  );
+  drawPeer(
+    ctx,
+    layout.peerB,
+    "Bob",
+    topo.b.ip,
+    state.candidates.filter((c) => c.side === "B").length,
+    packet?.from === "B" || packet?.to === "B",
+    pulse,
+  );
+
+  if (packet) {
+    const from = layout.endpoint(packet.from);
+    const to = layout.endpoint(packet.to);
+    drawPacket(ctx, from, to, packet.label, t);
+  }
+}
+
 function NetworkDiagram({
   scenario,
   state,
@@ -285,488 +736,68 @@ function NetworkDiagram({
   state: SimState;
   event: SimEvent | undefined;
 }) {
-  const packet = event?.packet;
-  const topo = scenario.topology;
-  const shared = !!topo.natShared && !!topo.a.behind && !!topo.b.behind;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneRef = useRef({ scenario, state, event });
+  sceneRef.current = { scenario, state, event };
 
-  // --- Layout coordinates (viewBox 800 × 380) ---
-  // Top band: servers (y=30)
-  // Middle band: internet cloud (y=70–170)
-  // Lower-middle band: NAT layer (y=215–265)
-  // Bottom band: peers (y=290–370)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  const serverY = 30;
-  const stunX = 320;
-  const turnX = 400;
-  const signalX = 480;
+    let rafId = 0;
+    let mounted = true;
 
-  const cloud = { x: 130, y: 70, w: 540, h: 100 };
+    const resizeAndScale = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const targetW = Math.max(1, Math.round(rect.width * dpr));
+      const targetH = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+      const scaleX = (rect.width / LOGICAL_W) * dpr;
+      const scaleY = (rect.height / LOGICAL_H) * dpr;
+      ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    };
 
-  const peerWidth = 130;
-  const peerHeight = 80;
-  const peerY = 290;
-  const peerA = { x: 20, cx: 20 + peerWidth / 2, top: peerY };
-  const peerB = { x: 650, cx: 650 + peerWidth / 2, top: peerY };
+    const startTs = performance.now();
+    const draw = (now: number) => {
+      if (!mounted) return;
+      resizeAndScale();
+      ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
+      const t = (now - startTs) / 1000;
+      drawScene(
+        ctx,
+        sceneRef.current.scenario,
+        sceneRef.current.state,
+        sceneRef.current.event,
+        t,
+      );
+      rafId = requestAnimationFrame(draw);
+    };
+    rafId = requestAnimationFrame(draw);
 
-  // NAT positions
-  const natWidth = 100;
-  const natHeight = 50;
-  const natY = 215;
-  // Separate NATs sit between peer and cloud horizontally
-  const natA = topo.a.behind && !shared ? { x: 160, cx: 160 + natWidth / 2 } : null;
-  const natB = topo.b.behind && !shared ? { x: 540, cx: 540 + natWidth / 2 } : null;
-  // Shared NAT sits centered between the two peers
-  const natShared = shared ? { x: 350, cx: 400 } : null;
+    const onResize = () => resizeAndScale();
+    window.addEventListener("resize", onResize);
 
-  // Helper: endpoint coords for packet animation
-  const endpointXY = (key: "A" | "B" | "stun" | "turn" | "signal") => {
-    if (key === "A") return { x: peerA.cx, y: peerY };
-    if (key === "B") return { x: peerB.cx, y: peerY };
-    if (key === "stun") return { x: stunX, y: serverY };
-    if (key === "turn") return { x: turnX, y: serverY };
-    return { x: signalX, y: serverY };
-  };
-  const from = packet ? endpointXY(packet.from) : null;
-  const to = packet ? endpointXY(packet.to) : null;
+    return () => {
+      mounted = false;
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
 
   return (
     <div className="border border-slate-200 rounded-lg bg-white p-4 overflow-x-auto">
-      <svg
-        viewBox="0 0 800 380"
-        className="w-full max-w-3xl mx-auto"
-        style={{ minWidth: 640 }}
-      >
-        {/* Internet cloud background */}
-        <rect
-          x={cloud.x}
-          y={cloud.y}
-          width={cloud.w}
-          height={cloud.h}
-          rx={50}
-          fill="#f1f5f9"
-          stroke="#cbd5e1"
-          strokeDasharray="4 4"
-        />
-        <text
-          x={cloud.x + cloud.w / 2}
-          y={cloud.y + cloud.h - 8}
-          textAnchor="middle"
-          style={{ fontSize: 9, fontWeight: 600 }}
-          fill="#94a3b8"
-        >
-          INTERNET
-        </text>
-
-        {/* Servers inside the cloud */}
-        <ServerIcon
-          x={stunX}
-          y={serverY + 80}
-          label="STUN"
-          color="#3b82f6"
-          highlighted={packet?.from === "stun" || packet?.to === "stun"}
-        />
-        <ServerIcon
-          x={turnX}
-          y={serverY + 80}
-          label="TURN"
-          color="#f59e0b"
-          highlighted={packet?.from === "turn" || packet?.to === "turn"}
-        />
-        <ServerIcon
-          x={signalX}
-          y={serverY + 80}
-          label="Signal"
-          color="#94a3b8"
-          highlighted={packet?.from === "signal" || packet?.to === "signal"}
-        />
-
-        {/* Connection lines */}
-        {shared ? (
-          <>
-            {/* Cloud → shared NAT */}
-            <line
-              x1={400}
-              y1={cloud.y + cloud.h}
-              x2={400}
-              y2={natY}
-              stroke="#cbd5e1"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-            />
-            {/* Shared NAT → Peer A (diagonal) */}
-            <line
-              x1={natShared!.cx - 30}
-              y1={natY + natHeight}
-              x2={peerA.cx}
-              y2={peerY}
-              stroke="#cbd5e1"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-            />
-            {/* Shared NAT → Peer B (diagonal) */}
-            <line
-              x1={natShared!.cx + 30}
-              y1={natY + natHeight}
-              x2={peerB.cx}
-              y2={peerY}
-              stroke="#cbd5e1"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-            />
-          </>
-        ) : (
-          <>
-            {/* Side A line */}
-            {natA ? (
-              <>
-                <line
-                  x1={natA.cx}
-                  y1={cloud.y + cloud.h}
-                  x2={natA.cx}
-                  y2={natY}
-                  stroke="#cbd5e1"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                />
-                <line
-                  x1={natA.cx}
-                  y1={natY + natHeight}
-                  x2={peerA.cx}
-                  y2={peerY}
-                  stroke="#cbd5e1"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                />
-              </>
-            ) : (
-              <line
-                x1={peerA.cx}
-                y1={peerY}
-                x2={peerA.cx}
-                y2={cloud.y + cloud.h}
-                stroke="#cbd5e1"
-                strokeWidth={1.5}
-                strokeDasharray="3 3"
-              />
-            )}
-
-            {/* Side B line */}
-            {natB ? (
-              <>
-                <line
-                  x1={natB.cx}
-                  y1={cloud.y + cloud.h}
-                  x2={natB.cx}
-                  y2={natY}
-                  stroke="#cbd5e1"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                />
-                <line
-                  x1={natB.cx}
-                  y1={natY + natHeight}
-                  x2={peerB.cx}
-                  y2={peerY}
-                  stroke="#cbd5e1"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                />
-              </>
-            ) : (
-              <line
-                x1={peerB.cx}
-                y1={peerY}
-                x2={peerB.cx}
-                y2={cloud.y + cloud.h}
-                stroke="#cbd5e1"
-                strokeWidth={1.5}
-                strokeDasharray="3 3"
-              />
-            )}
-          </>
-        )}
-
-        {/* NAT boxes */}
-        {natA && (
-          <NatBox
-            x={natA.x}
-            y={natY}
-            width={natWidth}
-            height={natHeight}
-            label={topo.a.behind!}
-            ip={topo.publicA ?? ""}
-          />
-        )}
-        {natB && (
-          <NatBox
-            x={natB.x}
-            y={natY}
-            width={natWidth}
-            height={natHeight}
-            label={topo.b.behind!}
-            ip={topo.publicB ?? ""}
-          />
-        )}
-        {natShared && (
-          <NatBox
-            x={natShared.x}
-            y={natY}
-            width={natWidth}
-            height={natHeight}
-            label={topo.a.behind!}
-            ip={topo.publicA ?? ""}
-            sharedLabel
-          />
-        )}
-
-        {/* Peers */}
-        <PeerBox
-          x={peerA.x}
-          y={peerY}
-          width={peerWidth}
-          height={peerHeight}
-          label="Alice"
-          ip={topo.a.ip}
-          candidateCount={state.candidates.filter((c) => c.side === "A").length}
-          glow={packet?.from === "A" || packet?.to === "A"}
-        />
-        <PeerBox
-          x={peerB.x}
-          y={peerY}
-          width={peerWidth}
-          height={peerHeight}
-          label="Bob"
-          ip={topo.b.ip}
-          candidateCount={state.candidates.filter((c) => c.side === "B").length}
-          glow={packet?.from === "B" || packet?.to === "B"}
-        />
-
-        {/* Animated packet */}
-        {packet && from && to && (
-          <PacketAnimation
-            x1={from.x}
-            y1={from.y}
-            x2={to.x}
-            y2={to.y}
-            label={packet.label}
-          />
-        )}
-      </svg>
+      <canvas
+        ref={canvasRef}
+        className="w-full max-w-3xl mx-auto block"
+        style={{ aspectRatio: `${LOGICAL_W} / ${LOGICAL_H}`, minWidth: 640 }}
+      />
     </div>
-  );
-}
-
-function ServerIcon({
-  x,
-  y,
-  label,
-  color,
-  highlighted,
-}: {
-  x: number;
-  y: number;
-  label: string;
-  color: string;
-  highlighted: boolean;
-}) {
-  return (
-    <g>
-      <rect
-        x={x - 24}
-        y={y - 14}
-        width={48}
-        height={28}
-        rx={4}
-        fill="white"
-        stroke={highlighted ? color : "#cbd5e1"}
-        strokeWidth={highlighted ? 2 : 1}
-      />
-      <text
-        x={x}
-        y={y + 4}
-        textAnchor="middle"
-        style={{ fontSize: 10, fontWeight: 600 }}
-        fill={highlighted ? color : "#475569"}
-      >
-        {label}
-      </text>
-    </g>
-  );
-}
-
-function NatBox({
-  x,
-  y,
-  width = 80,
-  height = 50,
-  label,
-  ip,
-  sharedLabel,
-}: {
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  label: string;
-  ip: string;
-  sharedLabel?: boolean;
-}) {
-  const labelText =
-    label === "cone"
-      ? "NAT (cone)"
-      : label === "symmetric"
-        ? "NAT (symmetric)"
-        : "NAT (no hairpin)";
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx={4}
-        fill="#fff7ed"
-        stroke="#fdba74"
-      />
-      <text
-        x={x + width / 2}
-        y={y + 17}
-        textAnchor="middle"
-        style={{ fontSize: 10, fontWeight: 600 }}
-        fill="#9a3412"
-      >
-        {sharedLabel ? "Shared router" : labelText}
-      </text>
-      <text
-        x={x + width / 2}
-        y={y + 32}
-        textAnchor="middle"
-        style={{ fontSize: 9 }}
-        fill="#9a3412"
-        fontFamily="monospace"
-      >
-        {ip}
-      </text>
-      {sharedLabel && (
-        <text
-          x={x + width / 2}
-          y={y + 45}
-          textAnchor="middle"
-          style={{ fontSize: 8 }}
-          fill="#9a3412"
-        >
-          {labelText}
-        </text>
-      )}
-    </g>
-  );
-}
-
-function PeerBox({
-  x,
-  y,
-  width = 120,
-  height = 70,
-  label,
-  ip,
-  candidateCount,
-  glow,
-}: {
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  label: string;
-  ip: string;
-  candidateCount: number;
-  glow: boolean;
-}) {
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx={6}
-        fill="white"
-        stroke={glow ? "#0284c7" : "#cbd5e1"}
-        strokeWidth={glow ? 2 : 1}
-      />
-      <text
-        x={x + width / 2}
-        y={y + 22}
-        textAnchor="middle"
-        style={{ fontSize: 13, fontWeight: 700 }}
-        fill="#0f172a"
-      >
-        {label}
-      </text>
-      <text
-        x={x + width / 2}
-        y={y + 42}
-        textAnchor="middle"
-        style={{ fontSize: 10 }}
-        fill="#64748b"
-        fontFamily="monospace"
-      >
-        {ip}
-      </text>
-      <text
-        x={x + width / 2}
-        y={y + 62}
-        textAnchor="middle"
-        style={{ fontSize: 9 }}
-        fill="#0284c7"
-      >
-        {candidateCount} candidate{candidateCount === 1 ? "" : "s"}
-      </text>
-    </g>
-  );
-}
-
-function PacketAnimation({
-  x1,
-  y1,
-  x2,
-  y2,
-  label,
-}: {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  label: string;
-}) {
-  return (
-    <g>
-      <line
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke="#0284c7"
-        strokeWidth={1.5}
-        strokeDasharray="4 3"
-        opacity={0.4}
-      />
-      <circle r={4} fill="#0284c7">
-        <animateMotion
-          dur="1.4s"
-          repeatCount="indefinite"
-          path={`M ${x1} ${y1} L ${x2} ${y2}`}
-        />
-      </circle>
-      <text
-        x={(x1 + x2) / 2}
-        y={(y1 + y2) / 2 - 6}
-        textAnchor="middle"
-        style={{ fontSize: 9, fontWeight: 600 }}
-        fill="#0369a1"
-      >
-        {label}
-      </text>
-    </g>
   );
 }
 
