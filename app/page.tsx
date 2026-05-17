@@ -94,6 +94,13 @@ export default function HomePage() {
         </h3>
         <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
           <li>
+            <Link href="/algorithm" className="text-ice-600 hover:underline">
+              Algorithm walkthrough + simulator
+            </Link>{" "}
+            — the full pipeline with formulas, plus a step-through animation
+            of how ICE plays out on 4 different network topologies.
+          </li>
+          <li>
             <Link href="/demo" className="text-ice-600 hover:underline">
               Live two-peer demo
             </Link>{" "}

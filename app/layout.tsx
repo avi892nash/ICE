@@ -30,6 +30,12 @@ export default function RootLayout({
               <Link href="/" className="text-slate-600 hover:text-ice-600">
                 Overview
               </Link>
+              <Link
+                href="/algorithm"
+                className="text-slate-600 hover:text-ice-600"
+              >
+                Algorithm
+              </Link>
               <Link href="/demo" className="text-slate-600 hover:text-ice-600">
                 Live Demo
               </Link>
