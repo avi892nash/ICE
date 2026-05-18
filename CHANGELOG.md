@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/avi892nash/ICE/compare/v1.1.0...v1.1.1) (2026-05-18)
+
+### Bug Fixes
+
+* **ci:** enable Pages bootstrap in publish-apt job ([#9](https://github.com/avi892nash/ICE/issues/9)) ([a5847f5](https://github.com/avi892nash/ICE/commit/a5847f5eeb70ef92999974039aa4cf03681ab520)), closes [#7](https://github.com/avi892nash/ICE/issues/7)
+
 ## [1.1.0](https://github.com/avi892nash/ICE/compare/v1.0.0...v1.1.0) (2026-05-18)
 
 ### Features
