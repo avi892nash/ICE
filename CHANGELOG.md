@@ -1,3 +1,13 @@
+## [1.4.2](https://github.com/avi892nash/ICE/compare/v1.4.1...v1.4.2) (2026-05-18)
+
+### Refactor
+
+* **release:** bump package.json + slim Depends to match Thor ([#22](https://github.com/avi892nash/ICE/issues/22)) ([0f0cb6e](https://github.com/avi892nash/ICE/commit/0f0cb6ee907d92c0b7a9aa979ab450a619f4687a))
+
+### Documentation
+
+* collapse install snippet to a single line with && ([#21](https://github.com/avi892nash/ICE/issues/21)) ([cc64491](https://github.com/avi892nash/ICE/commit/cc64491d41a90259075d134ffb2e1023e03e50e9))
+
 ## [1.4.1](https://github.com/avi892nash/ICE/compare/v1.4.0...v1.4.1) (2026-05-18)
 
 ### Refactor
