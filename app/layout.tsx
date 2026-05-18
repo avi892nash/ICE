@@ -180,8 +180,19 @@ export default function RootLayout({
         </header>
         <main className="max-w-5xl mx-auto px-6 py-10">{children}</main>
         <footer className="border-t border-slate-200 mt-20">
-          <div className="max-w-5xl mx-auto px-6 py-6 text-xs text-slate-500">
-            Built with Next.js to demonstrate WebRTC ICE. Educational use only.
+          <div className="max-w-5xl mx-auto px-6 py-6 text-xs text-slate-500 flex flex-col sm:flex-row gap-2 sm:gap-4 sm:items-center justify-between">
+            <span>
+              Built with Next.js to demonstrate WebRTC ICE. Educational use
+              only.
+            </span>
+            <a
+              href="https://github.com/avi892nash/ICE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ice-600 hover:text-ice-700 hover:underline whitespace-nowrap"
+            >
+              View on GitHub →
+            </a>
           </div>
         </footer>
       </body>
