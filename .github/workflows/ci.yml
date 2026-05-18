@@ -216,6 +216,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build Next.js
+        # semantic-release calls bash packaging/scripts/build-deb.sh
+        # ${nextRelease.version} via @semantic-release/exec's prepareCmd.
+        # That script requires .next/standalone, so we have to build before
+        # invoking semantic-release.
+        run: npm run build
+
       - name: Install nfpm (pinned)
         run: |
           set -e
