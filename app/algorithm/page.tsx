@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import { IceSimulator } from "@/components/IceSimulator";
 
-export const metadata = {
-  title: "ICE Algorithm — Step-by-step with simulator",
+export const metadata: Metadata = {
+  title: "Algorithm walkthrough",
+  description:
+    "The ICE protocol (RFC 8445) step-by-step: candidate gathering, signaling, pair formation, connectivity checks, nomination, and consent freshness. Includes an animated simulator across 4 network topologies (same LAN, cone NAT, no-hairpin, symmetric NAT).",
+  alternates: { canonical: "/algorithm" },
+  openGraph: {
+    title: "ICE Algorithm — Step-by-step with simulator",
+    description:
+      "Watch ICE play out on 4 network topologies. Pair states, packet inspector, formulas, RFC references.",
+    url: "/algorithm",
+  },
 };
 
 export default function AlgorithmPage() {

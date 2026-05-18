@@ -1,5 +1,16 @@
-export const metadata = {
-  title: "ICE Limitations",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Limitations & failure modes",
+  description:
+    "Seven reasons WebRTC ICE fails in production: symmetric NAT, TURN economics, IP leakage, setup latency, signaling burden, ICE-restart pain, and the absent trust model. Each with severity, mechanism, and why it exists.",
+  alternates: { canonical: "/limitations" },
+  openGraph: {
+    title: "Why ICE doesn't always work",
+    description:
+      "ICE fails 8–15% of the time in production. Here are the seven mechanisms and what they cost.",
+    url: "/limitations",
+  },
 };
 
 export default function LimitationsPage() {
