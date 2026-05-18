@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/avi892nash/ICE/compare/v1.3.1...v1.4.0) (2026-05-18)
+
+### Features
+
+* **install:** one-line installer script ([#19](https://github.com/avi892nash/ICE/issues/19)) ([432d7fb](https://github.com/avi892nash/ICE/commit/432d7fb006d354bf1b64847b4350642cc0feafb2))
+
 ## [1.3.1](https://github.com/avi892nash/ICE/compare/v1.3.0...v1.3.1) (2026-05-18)
 
 ### Refactor
