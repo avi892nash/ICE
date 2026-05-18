@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/avi892nash/ICE/compare/v1.1.1...v1.1.2) (2026-05-18)
+
+### Bug Fixes
+
+* **a11y:** label external GitHub link for screen readers ([#10](https://github.com/avi892nash/ICE/issues/10)) ([5ec4cb6](https://github.com/avi892nash/ICE/commit/5ec4cb6b999881f0344ecde9184190ab83dbb1a7))
+
 ## [1.1.1](https://github.com/avi892nash/ICE/compare/v1.1.0...v1.1.1) (2026-05-18)
 
 ### Bug Fixes
