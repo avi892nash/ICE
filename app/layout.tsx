@@ -189,6 +189,7 @@ export default function RootLayout({
               href="https://github.com/avi892nash/ICE"
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="View ICE Demo source on GitHub (opens in a new tab)"
               className="text-ice-600 hover:text-ice-700 hover:underline whitespace-nowrap"
             >
               View on GitHub →
