@@ -180,7 +180,12 @@ jobs:
           cp packaging/apt-repo/index.html site/index.html
           cp -r public/apt site/
 
+      # enablement: true lets the action bootstrap Pages on the repo
+      # itself the first time this workflow runs, instead of failing with
+      # 'Pages site not found'. Requires pages:write permission (set above).
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
