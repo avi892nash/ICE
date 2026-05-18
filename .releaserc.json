@@ -40,24 +40,13 @@
       }
     ],
     [
-      "@semantic-release/exec",
-      {
-        "verifyConditionsCmd": "test -x packaging/scripts/build-deb.sh && command -v nfpm >/dev/null 2>&1 || echo 'WARN: nfpm not installed locally; deb build will be skipped'",
-        "prepareCmd": "bash packaging/scripts/build-deb.sh ${nextRelease.version}"
-      }
-    ],
-    [
       "@semantic-release/github",
       {
         "assets": [
           {
-            "path": "dist/*.deb",
+            "path": "dist/ice-demo.deb",
             "label": "Debian package (amd64)",
             "name": "ice-demo_amd64.deb"
-          },
-          {
-            "path": "dist/SHA256SUMS",
-            "label": "Checksums"
           }
         ],
         "successComment": false,
