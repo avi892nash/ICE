@@ -26,12 +26,11 @@ jobs:
   pipeline:
     name: Pipeline
     runs-on: ubuntu-latest
-    # Set the deployment environment so the Pages deploy step gets the
-    # right URL in the job summary. Harmless on PR runs since the deploy
-    # steps are gated by event_name == 'push'.
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    # NOTE: Don't set a job-level `environment:` here. The github-pages
+    # environment has a 'deployment branches' rule that blocks runs from
+    # PR branches and would cause the whole job to fail in <1s before any
+    # step starts. actions/deploy-pages binds the deployment to the env
+    # internally — we just don't need the job-level association.
 
     steps:
       # -- Checkout + Node ----------------------------------------------
