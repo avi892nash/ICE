@@ -63,7 +63,6 @@ scripts:
   preremove: packaging/scripts/preremove.sh
   postremove: packaging/scripts/postremove.sh
 
-overrides:
-  deb:
-    fields:
-      Bugs: https://github.com/avi892nash/ICE/issues
+deb:
+  fields:
+    Bugs: https://github.com/avi892nash/ICE/issues
