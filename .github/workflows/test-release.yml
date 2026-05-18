@@ -1,19 +1,48 @@
 name: Test Published Release
 
+# `release: published` is what we'd ideally fire on, but GitHub deliberately
+# does NOT trigger downstream workflows for events created by GITHUB_TOKEN
+# (which is what semantic-release uses). So a fresh release published by the
+# Pipeline workflow won't auto-trigger this one. Two workarounds shipped:
+#   1. workflow_dispatch — run manually from the Actions UI or via
+#      `gh workflow run test-release.yml -f tag=v1.2.0`.
+#   2. (alternative, not used here) replace GITHUB_TOKEN in the release job
+#      with a PAT that has `repo` scope.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to smoke-test (e.g. v1.2.0). Defaults to latest."
+        required: false
+        type: string
 
 jobs:
   test-published-deb:
     name: Install & smoke-test published .deb
     runs-on: ubuntu-latest
     steps:
-      - name: Download ice-demo deb from the just-published release
+      - name: Resolve target tag
+        id: tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download "${{ github.event.release.tag_name }}" \
+          if [ -n "${{ github.event.release.tag_name }}" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Targeting release: $TAG"
+
+      - name: Download ice-demo deb from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.tag.outputs.tag }}" \
             --repo "${{ github.repository }}" \
             --pattern "ice-demo_*_amd64.deb" \
             --output ice-demo.deb
