@@ -8,19 +8,10 @@ Run as a long-lived service on any Debian-based Linux. Auto-upgrades are built i
 
 > **Requires:** Debian 11+ / Ubuntu 20.04+, plus Node.js 18+. The package declares `Depends: nodejs (>= 18)`; install it via the [NodeSource setup script](https://github.com/nodesource/distributions) if you don't already have it.
 
-### 1. Download the latest .deb
+### Install
 
 ```bash
-LATEST=$(curl -fsSL https://api.github.com/repos/avi892nash/ICE/releases/latest \
-  | grep -oE '"browser_download_url":\s*"[^"]*ice-demo_[^"]*_amd64\.deb"' \
-  | head -1 \
-  | grep -oE 'https://[^"]+')
-curl -fsSL "$LATEST" -o ice-demo.deb
-```
-
-### 2. Install
-
-```bash
+curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo_amd64.deb -o ice-demo.deb
 sudo apt install -y ./ice-demo.deb
 ```
 
