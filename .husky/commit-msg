@@ -1,1 +1,7 @@
+# Skip in CI — semantic-release commits the auto-generated CHANGELOG back
+# to the repo, and its commit body contains URLs longer than commitlint's
+# 100-char footer limit. Letting the bot through here is safe because
+# .github/workflows/ci.yml runs commitlint on PR commits separately.
+[ "$CI" = "true" ] && exit 0
+
 npx --no -- commitlint --edit "$1"
