@@ -15,6 +15,12 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  # Bump when nfpm releases a fix you want — the asset URL is versioned
+  # (the `latest/download/nfpm_amd64.deb` shortcut doesn't exist anymore,
+  # so we pin explicitly to avoid `dpkg-deb: unexpected end of file` errors).
+  NFPM_VERSION: "2.46.3"
+
 jobs:
   release:
     name: semantic-release + build .deb
@@ -34,32 +40,49 @@ jobs:
           node-version: "20"
           cache: npm
 
-      - name: Install nfpm
+      - name: Install nfpm (pinned version)
         run: |
-          curl -sLO https://github.com/goreleaser/nfpm/releases/latest/download/nfpm_amd64.deb
-          sudo dpkg -i nfpm_amd64.deb
+          set -e
+          url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
+          echo "==> Downloading $url"
+          curl -fsSL "$url" -o nfpm.deb
+          file nfpm.deb
+          sudo dpkg -i nfpm.deb
+          rm nfpm.deb
           nfpm --version
 
       - name: Install apt-utils (apt-ftparchive)
         run: sudo apt-get update && sudo apt-get install -y apt-utils
 
-      - run: npm ci
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
 
+      - name: Build Next.js
+        run: npm run build
+
+      # Use the official semantic-release-action — it exposes outputs
+      # natively (new_release_published, new_release_version, etc.) instead
+      # of fragile log-grepping.
       - name: Run semantic-release
         id: semrel
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/changelog@6
+            @semantic-release/exec@6
+            @semantic-release/git@10
+            conventional-changelog-conventionalcommits@8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summarize release decision
         run: |
-          # Capture stdout to detect whether a release happened
-          npx semantic-release | tee semrel.log
-          if grep -q "Published release" semrel.log; then
-            VERSION=$(grep -oP 'Published release \K[0-9]+\.[0-9]+\.[0-9]+' semrel.log | head -1)
-            echo "new_release_published=true" >> "$GITHUB_OUTPUT"
-            echo "new_release_version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.semrel.outputs.new_release_published }}" = "true" ]; then
+            echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }}"
           else
-            echo "new_release_published=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No release this run — no commits triggered a version bump"
           fi
 
       - name: Upload .deb artifact
@@ -68,6 +91,7 @@ jobs:
         with:
           name: deb-${{ steps.semrel.outputs.new_release_version }}
           path: dist/
+          if-no-files-found: error
 
   publish-apt:
     name: Publish APT repo to GitHub Pages
@@ -81,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download .deb
+      - name: Download .deb artifact
         uses: actions/download-artifact@v4
         with:
           name: deb-${{ needs.release.outputs.version }}
@@ -96,7 +120,7 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
         run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
-      - name: Build APT repo
+      - name: Build signed APT repo
         env:
           GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
           GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
@@ -108,9 +132,7 @@ jobs:
       - name: Stage Pages site
         run: |
           mkdir -p site
-          # Friendly landing page
           cp packaging/apt-repo/index.html site/index.html
-          # APT repo
           cp -r public/apt site/
 
       - uses: actions/configure-pages@v5
