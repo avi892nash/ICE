@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import { ICEDemo } from "@/components/ICEDemo";
 
-export const metadata = {
-  title: "Live ICE Demo",
+export const metadata: Metadata = {
+  title: "Live two-peer demo",
+  description:
+    "Establish a real WebRTC peer-to-peer connection between two browser tabs using copy-paste signaling. Watch ICE candidates appear in real time, inspect the selected pair, and chat over a data channel.",
+  alternates: { canonical: "/demo" },
+  openGraph: {
+    title: "Live WebRTC two-peer demo",
+    description:
+      "Open the page in two tabs, copy-paste the SDP, and watch ICE find a working path. Includes free TURN fallback and a selected-candidate-pair diagnostic.",
+    url: "/demo",
+  },
 };
 
 export default function DemoPage() {

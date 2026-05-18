@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import { CandidateExplorer } from "@/components/CandidateExplorer";
 
-export const metadata = {
-  title: "ICE Candidate Explorer",
+export const metadata: Metadata = {
+  title: "Candidate explorer",
+  description:
+    "Run ICE gathering against public STUN servers from your browser. Inspect parsed candidate fields: foundation, component, priority, related address, and the candidate type (host, srflx, prflx, relay).",
+  alternates: { canonical: "/candidates" },
+  openGraph: {
+    title: "ICE candidate explorer",
+    description:
+      "Gather and inspect WebRTC ICE candidates from your browser, with every field parsed.",
+    url: "/candidates",
+  },
 };
 
 export default function CandidatesPage() {
