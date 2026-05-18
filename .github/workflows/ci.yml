@@ -1,4 +1,4 @@
-name: CI
+name: Pipeline
 
 on:
   pull_request:
@@ -6,45 +6,183 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+  pages: write
+
+# PR runs cancel themselves on new pushes; release runs don't.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Bump when nfpm releases a fix you want. Versioned asset URL is the
+  # only one that resolves — /releases/latest/download/nfpm_amd64.deb does
+  # NOT exist anymore on the goreleaser repo.
+  NFPM_VERSION: "2.46.3"
 
 jobs:
-  commitlint:
-    name: Lint commit messages
+  # --------------------------------------------------------------------
+  # PR-only: lint commits, type-check, build. Catches regressions before
+  # they land on main.
+  # --------------------------------------------------------------------
+  validate:
+    name: Validate (lint + typecheck + build)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-      - run: npm ci
 
-      - name: Validate PR commits
-        if: github.event_name == 'pull_request'
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint PR commit messages
         run: |
           npx commitlint \
             --from ${{ github.event.pull_request.base.sha }} \
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
 
-      - name: Validate latest push commit
-        if: github.event_name == 'push'
-        run: npx commitlint --from HEAD~1 --to HEAD --verbose
+      - name: Type-check
+        run: npx tsc --noEmit
 
-  build:
-    name: Build + typecheck
+      - name: Build Next.js
+        run: npm run build
+
+  # --------------------------------------------------------------------
+  # Push-to-main: build, run semantic-release, build the .deb, attach
+  # to the GitHub Release. Does its own build (no shared artifact) so
+  # the release commit is built from the exact merged tree.
+  # --------------------------------------------------------------------
+  release:
+    name: Release (semantic-release + .deb)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.semrel.outputs.new_release_published }}
+      version: ${{ steps.semrel.outputs.new_release_version }}
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm run build
+
+      - name: Install nfpm (pinned)
+        run: |
+          set -e
+          url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
+          echo "==> Downloading $url"
+          curl -fsSL "$url" -o nfpm.deb
+          file nfpm.deb
+          sudo dpkg -i nfpm.deb
+          rm nfpm.deb
+          nfpm --version
+
+      - name: Install apt-utils (apt-ftparchive)
+        run: sudo apt-get update && sudo apt-get install -y apt-utils
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Run semantic-release
+        id: semrel
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/changelog@6
+            @semantic-release/exec@6
+            @semantic-release/git@10
+            conventional-changelog-conventionalcommits@8
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summarize release decision
+        run: |
+          if [ "${{ steps.semrel.outputs.new_release_published }}" = "true" ]; then
+            echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }}"
+          else
+            echo "::notice::No release this run — no commits triggered a version bump"
+          fi
+
+      - name: Upload .deb artifact
+        if: steps.semrel.outputs.new_release_published == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ steps.semrel.outputs.new_release_version }}
+          path: dist/
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------
+  # Publish the signed APT repo to GitHub Pages. Skipped when no release
+  # was cut. Will fail (with a clear message) until APT_GPG_KEY_ID /
+  # APT_GPG_PRIVATE_KEY secrets are set and Pages is enabled.
+  # --------------------------------------------------------------------
+  publish-apt:
+    name: Publish APT repo to GitHub Pages
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-${{ needs.release.outputs.version }}
+          path: dist/
+
+      - name: Install apt-utils
+        run: sudo apt-get update && sudo apt-get install -y apt-utils
+
+      - name: Import GPG key
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Build signed APT repo
+        env:
+          GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_REPO_ORIGIN: "ICE Demo APT"
+          APT_REPO_LABEL: "ice-demo"
+          APT_REPO_SUITE: "stable"
+        run: bash packaging/apt-repo/build-repo.sh
+
+      - name: Stage Pages site
+        run: |
+          mkdir -p site
+          cp packaging/apt-repo/index.html site/index.html
+          cp -r public/apt site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
