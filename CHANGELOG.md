@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/avi892nash/ICE/compare/v1.0.0...v1.1.0) (2026-05-18)
+
+### Features
+
+* **footer:** add View on GitHub link ([#7](https://github.com/avi892nash/ICE/issues/7)) ([6d972c8](https://github.com/avi892nash/ICE/commit/6d972c8695e91c9b883cb9c2655cb74ab060d7f0))
+
 ## 1.0.0 (2026-05-18)
 
 ### Features
