@@ -1,3 +1,17 @@
+## [1.2.0](https://github.com/avi892nash/ICE/compare/v1.1.2...v1.2.0) (2026-05-18)
+
+### Features
+
+* **release:** adopt Thor-style multi-job pipeline + GH-Releases-based auto-upgrade ([#14](https://github.com/avi892nash/ICE/issues/14)) ([9897ce3](https://github.com/avi892nash/ICE/commit/9897ce353b5230f7a44dbe46a7aaa413ba187fa4))
+
+### Bug Fixes
+
+* **ci:** build Next.js in the release job ([#15](https://github.com/avi892nash/ICE/issues/15)) ([2954f62](https://github.com/avi892nash/ICE/commit/2954f6265b3b0c0cfc2214833f49d4b7d10d9b61)), closes [#14](https://github.com/avi892nash/ICE/issues/14)
+
+### Documentation
+
+* add Debian/Ubuntu install instructions to README ([#2](https://github.com/avi892nash/ICE/issues/2)) ([d7384e9](https://github.com/avi892nash/ICE/commit/d7384e96a28c2fe777d6b53a7603bf663d512316))
+
 ## [1.1.2](https://github.com/avi892nash/ICE/compare/v1.1.1...v1.1.2) (2026-05-18)
 
 ### Bug Fixes
