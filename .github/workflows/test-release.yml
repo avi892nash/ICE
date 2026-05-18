@@ -1,0 +1,63 @@
+name: Test Published Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  test-published-deb:
+    name: Install & smoke-test published .deb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ice-demo deb from the just-published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "ice-demo_*_amd64.deb" \
+            --output ice-demo.deb
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install .deb
+        run: sudo apt-get install -y ./ice-demo.deb
+
+      - name: Verify package registered
+        run: dpkg -s ice-demo | grep -E "^(Status|Version):"
+
+      - name: Smoke-test the published binary
+        run: |
+          NODE_ENV=production HOSTNAME=0.0.0.0 PORT=19877 \
+            node /opt/ice-demo/server.js &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5 6; do
+            sleep 1
+            curl -sf -o /dev/null http://localhost:19877/ && break
+          done
+
+          fail() { echo "FAIL: $*"; exit 1; }
+
+          HTTP=$(curl -s -o /tmp/home.html -w "%{http_code}" http://localhost:19877/)
+          [ "$HTTP" = "200" ] || fail "/ returned $HTTP"
+          grep -q "ICE Demo" /tmp/home.html || fail "/ did not contain 'ICE Demo'"
+
+          for path in /algorithm /demo /candidates /limitations; do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:19877$path")
+            [ "$HTTP" = "200" ] || fail "$path returned $HTTP"
+          done
+
+          echo "PASS: published .deb installs and serves all pages"
+
+      - name: Verify updater script can dry-run-introspect the release
+        run: |
+          # Hit the GitHub API endpoint the updater script will poll, confirm
+          # the just-published release exposes the .deb under the expected name.
+          API="https://api.github.com/repos/${{ github.repository }}/releases/latest"
+          DEB_NAME=$(curl -fsSL -H "Accept: application/vnd.github+json" "$API" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);process.stdout.write((r.assets||[]).map(a=>a.name).find(n=>/^ice-demo_.*_amd64\.deb$/.test(n))||'')}")
+          [ -n "$DEB_NAME" ] || { echo "FAIL: latest release has no ice-demo_*_amd64.deb asset"; exit 1; }
+          echo "PASS: ice-demo-update will see asset '$DEB_NAME'"

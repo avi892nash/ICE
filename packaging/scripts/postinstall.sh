@@ -31,7 +31,17 @@ if [ -d /etc/ice-demo ]; then
     chmod 0640 /etc/ice-demo/ice-demo.env || true
 fi
 
-# 3. systemd: reload, enable + (re)start service, enable auto-upgrade timer
+# 3. Seed /var/lib/ice-demo/installed-tag so the updater's first run on a fresh
+# install knows what version is on disk and doesn't re-download it. The
+# DPKG_MAINTSCRIPT_PACKAGE env var is set by dpkg; we read the installed
+# version directly so the tag matches what's running.
+mkdir -p /var/lib/ice-demo
+INSTALLED_VERSION=$(dpkg-query -W -f='${Version}' ice-demo 2>/dev/null || echo "")
+if [ -n "$INSTALLED_VERSION" ]; then
+    echo "v${INSTALLED_VERSION}" > /var/lib/ice-demo/installed-tag
+fi
+
+# 4. systemd: reload, enable + (re)start service, enable auto-upgrade timer
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload
     systemctl enable ice-demo.service

@@ -1,12 +1,12 @@
 [Unit]
-Description=Auto-upgrade ice-demo from APT repository
+Description=ice-demo — Check and apply update from GitHub Releases
 Documentation=https://github.com/avi892nash/ICE
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'apt-get update -o Dir::Etc::sourcelist="sources.list.d/ice-demo.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" && DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y ice-demo'
-
-# Only update if a newer version is actually available
-SuccessExitStatus=0 100
+ExecStart=/usr/bin/ice-demo-update
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ice-demo-update

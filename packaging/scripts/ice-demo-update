@@ -1,0 +1,78 @@
+#!/bin/bash
+# ice-demo Auto-updater
+# Compares the locally-installed release tag against /releases/latest on GitHub
+# and applies the new .deb if they differ. Runs as root via systemd oneshot.
+set -e
+
+REPO="avi892nash/ICE"
+INSTALLED_TAG_FILE="/var/lib/ice-demo/installed-tag"
+
+log()  { printf '[ice-demo-update] %s\n' "$*"; }
+fail() { printf '[ice-demo-update] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# Don't fight another apt/dpkg process; skip and try next poll
+if lsof /var/lib/dpkg/lock-frontend &>/dev/null 2>&1; then
+  log "dpkg locked by another process, skipping (will retry next poll)"
+  exit 0
+fi
+
+API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+
+HTTP_CODE=$(curl -o /dev/null -sw "%{http_code}" \
+  -H "Accept: application/vnd.github+json" \
+  "$API_URL" 2>/dev/null)
+
+if [ "$HTTP_CODE" = "404" ]; then
+  log "No release found yet, skipping"
+  exit 0
+fi
+
+if [ "$HTTP_CODE" != "200" ]; then
+  log "GitHub API returned HTTP $HTTP_CODE, skipping"
+  exit 0
+fi
+
+RELEASE_JSON=$(curl -fsSL \
+  -H "Accept: application/vnd.github+json" \
+  "$API_URL" 2>/dev/null) || { log "GitHub API unreachable, skipping"; exit 0; }
+
+# JSON parsing via node (always present — the package depends on nodejs)
+json_get() {
+  node -e "
+    let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+      const d = JSON.parse(s);
+      const out = ($1);
+      if (out !== undefined && out !== null) process.stdout.write(String(out));
+    });
+  "
+}
+
+TAG=$(echo "$RELEASE_JSON" | json_get "d.tag_name")
+DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
+  | json_get "(d.assets||[]).find(a=>/^ice-demo_.*_amd64\\.deb$/.test(a.name))?.browser_download_url")
+
+[ -n "$TAG" ] || fail "release has no tag_name"
+[ -n "$DOWNLOAD_URL" ] || fail "no ice-demo_*_amd64.deb asset on release $TAG"
+
+LOCAL_TAG=$(cat "$INSTALLED_TAG_FILE" 2>/dev/null || echo "")
+
+if [ "$LOCAL_TAG" = "$TAG" ]; then
+  log "Up to date ($TAG)"
+  exit 0
+fi
+
+log "Update available: ${LOCAL_TAG:-none} → $TAG"
+
+TMPFILE=$(mktemp /tmp/ice-demo-XXXXXX.deb)
+trap 'rm -f "$TMPFILE"' EXIT
+
+log "Downloading $DOWNLOAD_URL"
+curl -fsSL "$DOWNLOAD_URL" -o "$TMPFILE" || fail "download failed"
+
+log "Installing $TAG..."
+apt install -y "$TMPFILE" || fail "apt install failed (see apt output above)"
+
+mkdir -p "$(dirname "$INSTALLED_TAG_FILE")"
+echo "$TAG" > "$INSTALLED_TAG_FILE"
+
+log "Successfully updated to $TAG"

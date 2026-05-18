@@ -16,35 +16,81 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Bump when nfpm releases a fix you want. /releases/latest/download/
-  # asset URLs are versioned — the unversioned shortcut 404s.
   NFPM_VERSION: "2.46.3"
+  NODE_VERSION: "20"
+
+# Pipeline shape (PR):
+#
+#   commitlint
+#   version ──► build-app ──► test-deb
+#
+# Pipeline shape (push to main, adds release):
+#
+#   version ──► build-app ──► test-deb ──► release
+#
+# Post-release (test-release.yml): on release published, the published
+# .deb is downloaded, installed in a fresh runner, and the Next.js
+# server is smoke-tested — proving the artifact end users actually
+# fetch from GitHub Releases works in isolation.
 
 jobs:
-  pipeline:
-    name: Pipeline
+  # ---------------------------------------------------------------------------
+  # commitlint: lint PR commit messages against conventional-commits
+  # ---------------------------------------------------------------------------
+  commitlint:
+    name: Commitlint
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint PR commit messages
-        if: github.event_name == 'pull_request'
-        run: |
+      - run: npm ci
+      - run: |
           npx commitlint \
             --from ${{ github.event.pull_request.base.sha }} \
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
+
+  # ---------------------------------------------------------------------------
+  # version: compute the next version string for build-app to bake into the deb
+  # ---------------------------------------------------------------------------
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.v.outputs.BASE }}
+      full: ${{ steps.v.outputs.FULL }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          BASE=$(node -p "require('./package.json').version")
+          SHA=$(git rev-parse --short HEAD)
+          echo "BASE=${BASE}"        >> $GITHUB_OUTPUT
+          echo "FULL=${BASE}+${SHA}" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # build-app: typecheck, next build, package as .deb via nfpm
+  # ---------------------------------------------------------------------------
+  build-app:
+    name: Build .deb
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Type-check
         run: npx tsc --noEmit
@@ -53,18 +99,132 @@ jobs:
         run: npm run build
 
       - name: Install nfpm (pinned)
-        if: github.event_name == 'push'
         run: |
           set -e
           url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
           curl -fsSL "$url" -o nfpm.deb
-          file nfpm.deb
           sudo dpkg -i nfpm.deb
           rm nfpm.deb
           nfpm --version
 
+      - name: Build .deb
+        run: bash packaging/scripts/build-deb.sh ${{ needs.version.outputs.base }}
+
+      - name: Rename .deb to a stable name for artifact transfer
+        run: cp dist/ice-demo_*_amd64.deb ice-demo.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ice-demo-deb
+          path: ice-demo.deb
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # test-deb: actually install the .deb on a clean runner + smoke-test the app
+  # Catches packaging mistakes BEFORE release (file paths, deps, missing files).
+  # ---------------------------------------------------------------------------
+  test-deb:
+    name: Smoke-test .deb
+    runs-on: ubuntu-latest
+    needs: build-app
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ice-demo-deb
+          path: .
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install .deb
+        run: sudo apt-get install -y ./ice-demo.deb
+
+      - name: Verify package registered
+        run: dpkg -s ice-demo | grep -E "^(Status|Version):"
+
+      - name: Verify systemd units shipped
+        run: |
+          for f in /lib/systemd/system/ice-demo.service \
+                   /lib/systemd/system/ice-demo-update.service \
+                   /lib/systemd/system/ice-demo-update.timer; do
+            [ -f "$f" ] || { echo "FAIL: $f missing"; exit 1; }
+          done
+          echo "PASS: all systemd units present"
+
+      - name: Verify updater script shipped
+        run: |
+          [ -x /usr/bin/ice-demo-update ] || { echo "FAIL: /usr/bin/ice-demo-update missing or not executable"; exit 1; }
+          echo "PASS: ice-demo-update present + executable"
+
+      - name: Start Next.js server + smoke test endpoints
+        run: |
+          NODE_ENV=production HOSTNAME=0.0.0.0 PORT=19877 \
+            node /opt/ice-demo/server.js &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5 6; do
+            sleep 1
+            curl -sf -o /dev/null http://localhost:19877/ && break
+          done
+
+          fail() { echo "FAIL: $*"; exit 1; }
+
+          # /  → 200 with title
+          HTTP=$(curl -s -o /tmp/home.html -w "%{http_code}" http://localhost:19877/)
+          [ "$HTTP" = "200" ] || fail "/ returned $HTTP"
+          grep -q "ICE Demo" /tmp/home.html || fail "/ did not contain 'ICE Demo'"
+
+          # All app routes → 200
+          for path in /algorithm /demo /candidates /limitations; do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:19877$path")
+            [ "$HTTP" = "200" ] || fail "$path returned $HTTP"
+          done
+
+          # Metadata routes
+          for path in /robots.txt /sitemap.xml /manifest.webmanifest; do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:19877$path")
+            [ "$HTTP" = "200" ] || fail "$path returned $HTTP"
+          done
+
+          # Static assets served from /opt/ice-demo/public
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:19877/og-image.png)
+          [ "$HTTP" = "200" ] || fail "/og-image.png returned $HTTP"
+
+          echo "PASS: server up, 9 endpoints OK"
+
+  # ---------------------------------------------------------------------------
+  # release: only on push to main, only after test-deb passes
+  # semantic-release tags + creates GH release + attaches the .deb.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [version, test-deb]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install nfpm (pinned)
+        run: |
+          set -e
+          url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
+          curl -fsSL "$url" -o nfpm.deb
+          sudo dpkg -i nfpm.deb
+          rm nfpm.deb
+
       - name: Run semantic-release
-        if: github.event_name == 'push'
         id: semrel
         uses: cycjimmy/semantic-release-action@v4
         with:
@@ -78,8 +238,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Summarize release decision
-        if: github.event_name == 'push'
+      - name: Summary
         run: |
           if [ "${{ steps.semrel.outputs.new_release_published }}" = "true" ]; then
             echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }} — .deb attached to GitHub Release"
