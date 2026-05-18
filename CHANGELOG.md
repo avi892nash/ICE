@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/avi892nash/ICE/compare/v1.3.0...v1.3.1) (2026-05-18)
+
+### Refactor
+
+* **ci:** align pipeline with Thor — single build, npx semantic-release ([#18](https://github.com/avi892nash/ICE/issues/18)) ([696f662](https://github.com/avi892nash/ICE/commit/696f66262adcd184cbae31ffcd06c4eb23ea56bd))
+
 ## [1.3.0](https://github.com/avi892nash/ICE/compare/v1.2.0...v1.3.0) (2026-05-18)
 
 ### Features
