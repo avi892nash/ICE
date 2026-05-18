@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/avi892nash/ICE/compare/v1.2.0...v1.3.0) (2026-05-18)
+
+### Features
+
+* **release:** stable asset name 'ice-demo_amd64.deb' for one-line curl install ([#17](https://github.com/avi892nash/ICE/issues/17)) ([7a37b71](https://github.com/avi892nash/ICE/commit/7a37b71c8a2eb8f9bcab5cb8008fae6e27c5cc44))
+
 ## [1.2.0](https://github.com/avi892nash/ICE/compare/v1.1.2...v1.2.0) (2026-05-18)
 
 ### Features
