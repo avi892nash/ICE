@@ -25,19 +25,24 @@ depends:
   - systemd
 
 contents:
-  # Standalone Next.js server bundle
-  - src: .next/standalone/
-    dst: /opt/ice-demo/
-    file_info:
-      mode: 0755
+  # Standalone Next.js server bundle.
+  # `type: tree` is required so nfpm walks the directory recursively and
+  # preserves the layout — without it, multiple files with the same
+  # basename (e.g. _head.segment.rsc under different routes) collide at
+  # the destination root.
+  - src: .next/standalone
+    dst: /opt/ice-demo
+    type: tree
 
   # Static assets (Next.js doesn't copy these into standalone)
-  - src: .next/static/
-    dst: /opt/ice-demo/.next/static/
+  - src: .next/static
+    dst: /opt/ice-demo/.next/static
+    type: tree
 
-  # Public folder (favicons, images)
-  - src: public/
-    dst: /opt/ice-demo/public/
+  # Public folder (favicons, images, og-image)
+  - src: public
+    dst: /opt/ice-demo/public
+    type: tree
 
   # Systemd unit and timer
   - src: packaging/systemd/ice-demo.service
