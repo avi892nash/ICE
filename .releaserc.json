@@ -52,7 +52,8 @@
         "assets": [
           {
             "path": "dist/*.deb",
-            "label": "Debian package (amd64)"
+            "label": "Debian package (amd64)",
+            "name": "ice-demo_amd64.deb"
           },
           {
             "path": "dist/SHA256SUMS",

@@ -11,18 +11,12 @@ ice-demo ships as a `.deb` attached to each [GitHub Release](https://github.com/
 
 ## Install
 
-### One-line download + install
-
 ```bash
-LATEST=$(curl -fsSL https://api.github.com/repos/avi892nash/ICE/releases/latest \
-  | grep -oE '"browser_download_url":\s*"[^"]*ice-demo_[^"]*_amd64\.deb"' \
-  | head -1 \
-  | grep -oE 'https://[^"]+')
-curl -fsSL "$LATEST" -o /tmp/ice-demo.deb
+curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo_amd64.deb -o /tmp/ice-demo.deb
 sudo apt install -y /tmp/ice-demo.deb
 ```
 
-`apt install ./file.deb` is preferred over `dpkg -i` because it auto-resolves the `nodejs` / `adduser` / `systemd` dependency lines.
+GitHub redirects `releases/latest/download/<name>` to the same asset on the newest release, so this URL always pulls the current version. `apt install ./file.deb` is preferred over `dpkg -i` because it auto-resolves the `nodejs` / `adduser` / `systemd` dependency lines.
 
 The service is now up at <http://localhost:3000>.
 
