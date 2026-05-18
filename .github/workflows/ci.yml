@@ -13,30 +13,33 @@ permissions:
   id-token: write
   pages: write
 
-# PR runs cancel themselves on new pushes; release runs don't.
 concurrency:
   group: pipeline-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Bump when nfpm releases a fix you want. Versioned asset URL is the
-  # only one that resolves — /releases/latest/download/nfpm_amd64.deb does
-  # NOT exist anymore on the goreleaser repo.
+  # Bump when nfpm releases a fix you want. /releases/latest/download/
+  # asset URLs are versioned now — the unversioned shortcut 404s.
   NFPM_VERSION: "2.46.3"
 
 jobs:
-  # --------------------------------------------------------------------
-  # PR-only: lint commits, type-check, build. Catches regressions before
-  # they land on main.
-  # --------------------------------------------------------------------
-  validate:
-    name: Validate (lint + typecheck + build)
-    if: github.event_name == 'pull_request'
+  pipeline:
+    name: Pipeline
     runs-on: ubuntu-latest
+    # NOTE: Don't set a job-level `environment:` here. The github-pages
+    # environment has a 'deployment branches' rule that blocks runs from
+    # PR branches and would cause the whole job to fail in <1s before any
+    # step starts. actions/deploy-pages binds the deployment to the env
+    # internally — we just don't need the job-level association.
+
     steps:
+      # -- Checkout + Node ----------------------------------------------
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # persist-credentials so semantic-release's @semantic-release/git
+          # plugin can push the CHANGELOG bump back to main.
+          persist-credentials: true
 
       - uses: actions/setup-node@v4
         with:
@@ -46,48 +49,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # -- PR-only commit linting ---------------------------------------
       - name: Lint PR commit messages
+        if: github.event_name == 'pull_request'
         run: |
           npx commitlint \
             --from ${{ github.event.pull_request.base.sha }} \
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
 
+      # -- Type-check + build (always) ----------------------------------
       - name: Type-check
         run: npx tsc --noEmit
 
       - name: Build Next.js
         run: npm run build
 
-  # --------------------------------------------------------------------
-  # Push-to-main: build, run semantic-release, build the .deb, attach
-  # to the GitHub Release. Does its own build (no shared artifact) so
-  # the release commit is built from the exact merged tree.
-  # --------------------------------------------------------------------
-  release:
-    name: Release (semantic-release + .deb)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    outputs:
-      released: ${{ steps.semrel.outputs.new_release_published }}
-      version: ${{ steps.semrel.outputs.new_release_version }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
+      # -- Push-to-main: release + .deb ---------------------------------
       - name: Install nfpm (pinned)
+        if: github.event_name == 'push'
         run: |
           set -e
           url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
-          echo "==> Downloading $url"
           curl -fsSL "$url" -o nfpm.deb
           file nfpm.deb
           sudo dpkg -i nfpm.deb
@@ -95,15 +78,11 @@ jobs:
           nfpm --version
 
       - name: Install apt-utils (apt-ftparchive)
+        if: github.event_name == 'push'
         run: sudo apt-get update && sudo apt-get install -y apt-utils
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Next.js
-        run: npm run build
-
       - name: Run semantic-release
+        if: github.event_name == 'push'
         id: semrel
         uses: cycjimmy/semantic-release-action@v4
         with:
@@ -118,6 +97,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summarize release decision
+        if: github.event_name == 'push'
         run: |
           if [ "${{ steps.semrel.outputs.new_release_published }}" = "true" ]; then
             echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }}"
@@ -125,47 +105,15 @@ jobs:
             echo "::notice::No release this run — no commits triggered a version bump"
           fi
 
-      - name: Upload .deb artifact
-        if: steps.semrel.outputs.new_release_published == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: deb-${{ steps.semrel.outputs.new_release_version }}
-          path: dist/
-          if-no-files-found: error
-
-  # --------------------------------------------------------------------
-  # Publish the signed APT repo to GitHub Pages. Skipped when no release
-  # was cut. Will fail (with a clear message) until APT_GPG_KEY_ID /
-  # APT_GPG_PRIVATE_KEY secrets are set and Pages is enabled.
-  # --------------------------------------------------------------------
-  publish-apt:
-    name: Publish APT repo to GitHub Pages
-    needs: release
-    if: needs.release.outputs.released == 'true'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download .deb artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deb-${{ needs.release.outputs.version }}
-          path: dist/
-
-      - name: Install apt-utils
-        run: sudo apt-get update && sudo apt-get install -y apt-utils
-
+      # -- Publish APT repo to GitHub Pages (only when a release was cut)
       - name: Import GPG key
-        if: env.GPG_PRIVATE_KEY != ''
+        if: steps.semrel.outputs.new_release_published == 'true' && env.GPG_PRIVATE_KEY != ''
         env:
           GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
         run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
       - name: Build signed APT repo
+        if: steps.semrel.outputs.new_release_published == 'true'
         env:
           GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
           GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
@@ -175,19 +123,23 @@ jobs:
         run: bash packaging/apt-repo/build-repo.sh
 
       - name: Stage Pages site
+        if: steps.semrel.outputs.new_release_published == 'true'
         run: |
           mkdir -p site
           cp packaging/apt-repo/index.html site/index.html
           cp -r public/apt site/
 
-      # enablement: true lets the action bootstrap Pages on the repo
-      # itself the first time this workflow runs, instead of failing with
-      # 'Pages site not found'. Requires pages:write permission (set above).
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
+      - name: Configure Pages
+        if: steps.semrel.outputs.new_release_published == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: steps.semrel.outputs.new_release_published == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
-      - id: deploy
+
+      - name: Deploy to GitHub Pages
+        if: steps.semrel.outputs.new_release_published == 'true'
+        id: deploy
         uses: actions/deploy-pages@v4
