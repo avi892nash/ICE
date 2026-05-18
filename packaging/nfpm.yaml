@@ -1,0 +1,69 @@
+# nfpm config for building the ice-demo .deb package.
+# Run via packaging/scripts/build-deb.sh which substitutes ${VERSION}.
+# Docs: https://nfpm.goreleaser.com/configuration/
+
+name: ice-demo
+arch: amd64
+platform: linux
+version: ${VERSION}
+version_schema: semver
+section: web
+priority: optional
+maintainer: avi892nash <noreply@github.com>
+description: |
+  Interactive Connectivity Establishment (ICE) demo — a Next.js
+  application that explains how WebRTC peer-to-peer connections work,
+  with a live demo, candidate explorer, algorithm simulator, and a
+  candid look at the limitations.
+vendor: avi892nash
+homepage: https://github.com/avi892nash/ICE
+license: MIT
+
+depends:
+  - nodejs (>= 18)
+  - adduser
+  - systemd
+
+contents:
+  # Standalone Next.js server bundle
+  - src: .next/standalone/
+    dst: /opt/ice-demo/
+    file_info:
+      mode: 0755
+
+  # Static assets (Next.js doesn't copy these into standalone)
+  - src: .next/static/
+    dst: /opt/ice-demo/.next/static/
+
+  # Public folder (favicons, images)
+  - src: public/
+    dst: /opt/ice-demo/public/
+
+  # Systemd unit and timer
+  - src: packaging/systemd/ice-demo.service
+    dst: /lib/systemd/system/ice-demo.service
+  - src: packaging/systemd/ice-demo-update.service
+    dst: /lib/systemd/system/ice-demo-update.service
+  - src: packaging/systemd/ice-demo-update.timer
+    dst: /lib/systemd/system/ice-demo-update.timer
+
+  # Default environment file (user-editable, marked as conffile)
+  - src: packaging/etc/ice-demo.env
+    dst: /etc/ice-demo/ice-demo.env
+    type: config|noreplace
+
+  # Bundled changelog so dpkg --changelog works
+  - src: CHANGELOG.md
+    dst: /usr/share/doc/ice-demo/CHANGELOG.md
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+overrides:
+  deb:
+    fields:
+      Bugs: https://github.com/avi892nash/ICE/issues

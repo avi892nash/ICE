@@ -1,0 +1,36 @@
+[Unit]
+Description=ICE Demo — Next.js server
+Documentation=https://github.com/avi892nash/ICE
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ice-demo
+Group=ice-demo
+WorkingDirectory=/opt/ice-demo
+EnvironmentFile=/etc/ice-demo/ice-demo.env
+ExecStart=/usr/bin/node /opt/ice-demo/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillMode=mixed
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ice-demo
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

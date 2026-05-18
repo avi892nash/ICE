@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+  pages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: semantic-release + build .deb
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.semrel.outputs.new_release_published }}
+      version: ${{ steps.semrel.outputs.new_release_version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install nfpm
+        run: |
+          curl -sLO https://github.com/goreleaser/nfpm/releases/latest/download/nfpm_amd64.deb
+          sudo dpkg -i nfpm_amd64.deb
+          nfpm --version
+
+      - name: Install apt-utils (apt-ftparchive)
+        run: sudo apt-get update && sudo apt-get install -y apt-utils
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Run semantic-release
+        id: semrel
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Capture stdout to detect whether a release happened
+          npx semantic-release | tee semrel.log
+          if grep -q "Published release" semrel.log; then
+            VERSION=$(grep -oP 'Published release \K[0-9]+\.[0-9]+\.[0-9]+' semrel.log | head -1)
+            echo "new_release_published=true" >> "$GITHUB_OUTPUT"
+            echo "new_release_version=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "new_release_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload .deb artifact
+        if: steps.semrel.outputs.new_release_published == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ steps.semrel.outputs.new_release_version }}
+          path: dist/
+
+  publish-apt:
+    name: Publish APT repo to GitHub Pages
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download .deb
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-${{ needs.release.outputs.version }}
+          path: dist/
+
+      - name: Install apt-utils
+        run: sudo apt-get update && sudo apt-get install -y apt-utils
+
+      - name: Import GPG key
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Build APT repo
+        env:
+          GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_REPO_ORIGIN: "ICE Demo APT"
+          APT_REPO_LABEL: "ice-demo"
+          APT_REPO_SUITE: "stable"
+        run: bash packaging/apt-repo/build-repo.sh
+
+      - name: Stage Pages site
+        run: |
+          mkdir -p site
+          # Friendly landing page
+          cp packaging/apt-repo/index.html site/index.html
+          # APT repo
+          cp -r public/apt site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

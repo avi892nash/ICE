@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily auto-upgrade check for ice-demo
+Documentation=https://github.com/avi892nash/ICE
+
+[Timer]
+# First run 15 min after boot, then every 24 hours (with random 30 min jitter
+# to avoid stampeding the APT repo from many clients at once).
+OnBootSec=15min
+OnUnitActiveSec=24h
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
