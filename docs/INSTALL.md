@@ -1,48 +1,39 @@
 # Installing ice-demo
 
-ice-demo ships as a `.deb` package via a small APT repo. Once installed, a
-systemd timer auto-upgrades the package whenever a new release is published.
+ice-demo ships as a `.deb` attached to each [GitHub Release](https://github.com/avi892nash/ICE/releases). Once installed, a systemd timer polls the GitHub API and applies new versions automatically — no APT repo, no extra trust setup.
 
 ## Requirements
 
 - Debian 11+ / Ubuntu 20.04+ (or anything `apt`-based)
-- Node.js 18+ available as the system package (the .deb declares
-  `Depends: nodejs (>= 18)`). The easiest source on Debian/Ubuntu is the
+- Node.js 18+ available as the system package. The .deb declares
+  `Depends: nodejs (>= 18)`. The easiest source on Debian/Ubuntu is the
   [NodeSource setup script](https://github.com/nodesource/distributions).
 
-## One-time setup
+## Install
 
-### 1. Trust the signing key
-
-```bash
-curl -fsSL https://avi892nash.github.io/ICE/apt/pubkey.gpg \
-  | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/ice-demo.gpg
-```
-
-### 2. Add the APT source
+### One-line download + install
 
 ```bash
-echo "deb [signed-by=/etc/apt/trusted.gpg.d/ice-demo.gpg] https://avi892nash.github.io/ICE/apt stable main" \
-  | sudo tee /etc/apt/sources.list.d/ice-demo.list
+LATEST=$(curl -fsSL https://api.github.com/repos/avi892nash/ICE/releases/latest \
+  | grep -oE '"browser_download_url":\s*"[^"]*ice-demo_[^"]*_amd64\.deb"' \
+  | head -1 \
+  | grep -oE 'https://[^"]+')
+curl -fsSL "$LATEST" -o /tmp/ice-demo.deb
+sudo apt install -y /tmp/ice-demo.deb
 ```
 
-### 3. Install
+`apt install ./file.deb` is preferred over `dpkg -i` because it auto-resolves the `nodejs` / `adduser` / `systemd` dependency lines.
 
-```bash
-sudo apt update
-sudo apt install ice-demo
-```
-
-That's it. The service is up at <http://localhost:3000>.
+The service is now up at <http://localhost:3000>.
 
 ## Auto-upgrade
 
-Installation enables two systemd units:
+The install enables two systemd units:
 
 | Unit | Purpose |
 | --- | --- |
-| `ice-demo.service` | Runs the Next.js server |
-| `ice-demo-update.timer` | Daily check + apply of newer .deb versions |
+| `ice-demo.service` | Runs the Next.js server (hardened, dedicated `ice-demo` user) |
+| `ice-demo-update.timer` | Every 30 min: runs `/usr/bin/ice-demo-update`, which polls `https://api.github.com/repos/avi892nash/ICE/releases/latest`, compares `tag_name` against `/var/lib/ice-demo/installed-tag`, and `apt install`s the newer .deb if they differ |
 
 Inspect the timer:
 
@@ -50,22 +41,22 @@ Inspect the timer:
 systemctl list-timers ice-demo-update.timer
 ```
 
-Disable auto-upgrade (and only ever upgrade manually):
+Force an immediate update check:
+
+```bash
+sudo systemctl start ice-demo-update.service
+journalctl -t ice-demo-update -f
+```
+
+Opt out of auto-upgrade (keep ice-demo on the version currently installed):
 
 ```bash
 sudo systemctl disable --now ice-demo-update.timer
 ```
 
-Force an immediate upgrade check:
-
-```bash
-sudo systemctl start ice-demo-update.service
-```
-
 ## Configuration
 
-Environment variables live in `/etc/ice-demo/ice-demo.env`. After editing,
-restart the service:
+Environment variables live in `/etc/ice-demo/ice-demo.env`. After editing, restart the service:
 
 ```bash
 sudo nano /etc/ice-demo/ice-demo.env
@@ -86,14 +77,13 @@ NODE_ENV=production
 systemctl status ice-demo            # is it running?
 journalctl -u ice-demo -f            # tail logs
 systemctl restart ice-demo           # restart
-sudo apt install --only-upgrade ice-demo   # manual upgrade
+sudo systemctl start ice-demo-update.service  # force an upgrade check now
+journalctl -t ice-demo-update        # see updater history
 ```
 
 ## Uninstall
 
 ```bash
 sudo apt remove ice-demo             # keeps /etc/ice-demo and the user
-sudo apt purge ice-demo              # remove everything including user
-sudo rm /etc/apt/sources.list.d/ice-demo.list
-sudo rm /etc/apt/trusted.gpg.d/ice-demo.gpg
+sudo apt purge ice-demo              # remove everything (including /var/lib/ice-demo)
 ```

@@ -44,13 +44,19 @@ contents:
     dst: /opt/ice-demo/public
     type: tree
 
-  # Systemd unit and timer
+  # Systemd unit and auto-update timer
   - src: packaging/systemd/ice-demo.service
     dst: /lib/systemd/system/ice-demo.service
   - src: packaging/systemd/ice-demo-update.service
     dst: /lib/systemd/system/ice-demo-update.service
   - src: packaging/systemd/ice-demo-update.timer
     dst: /lib/systemd/system/ice-demo-update.timer
+
+  # Auto-updater script — polls GitHub Releases API and installs newer .debs
+  - src: packaging/scripts/ice-demo-update
+    dst: /usr/bin/ice-demo-update
+    file_info:
+      mode: 0755
 
   # Default environment file (user-editable, marked as conffile)
   - src: packaging/etc/ice-demo.env
