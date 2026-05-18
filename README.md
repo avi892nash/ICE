@@ -11,6 +11,12 @@ Run as a long-lived service on any Debian-based Linux. Auto-upgrades are built i
 ### Install
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/avi892nash/ICE/main/install.sh | sudo sh
+```
+
+Or, if you'd rather inspect the .deb before installing:
+
+```bash
 curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo_amd64.deb -o ice-demo.deb
 sudo apt install -y ./ice-demo.deb
 ```
