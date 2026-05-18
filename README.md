@@ -2,6 +2,81 @@
 
 A Next.js app that demonstrates how WebRTC's **ICE** protocol (RFC 8445) finds a network path between two peers, and lays out where and why it breaks.
 
+## Install (Debian / Ubuntu)
+
+Run as a long-lived service on any Debian-based Linux. Auto-upgrades are built in via a systemd timer — once installed, you don't have to touch it again to stay on the latest version.
+
+> **Requires:** Debian 11+ / Ubuntu 20.04+, plus Node.js 18+. The package declares `Depends: nodejs (>= 18)`; install it via the [NodeSource setup script](https://github.com/nodesource/distributions) if you don't already have it.
+
+### 1. Trust the repository signing key
+
+```bash
+curl -fsSL https://avi892nash.github.io/ICE/apt/pubkey.gpg \
+  | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/ice-demo.gpg
+```
+
+### 2. Add the APT repository
+
+```bash
+echo "deb [signed-by=/etc/apt/trusted.gpg.d/ice-demo.gpg] https://avi892nash.github.io/ICE/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/ice-demo.list
+```
+
+### 3. Install
+
+```bash
+sudo apt update
+sudo apt install ice-demo
+```
+
+That's it — the service is up at <http://localhost:3000>.
+
+### How auto-upgrade works
+
+The install enables two systemd units:
+
+| Unit | What it does |
+| --- | --- |
+| `ice-demo.service` | Runs the Next.js server (hardened: dedicated user, `PrivateTmp`, `ProtectSystem=strict`, …) |
+| `ice-demo-update.timer` | Daily check against the APT repo; runs `apt-get install --only-upgrade ice-demo` if there's a newer version (with 30 min jitter) |
+
+Common operations:
+
+```bash
+systemctl status ice-demo                         # is it running?
+journalctl -u ice-demo -f                         # tail logs
+systemctl list-timers ice-demo-update.timer       # when's the next upgrade check?
+sudo systemctl disable --now ice-demo-update.timer  # opt out of auto-upgrade
+```
+
+### Configuration
+
+Environment variables live in `/etc/ice-demo/ice-demo.env`. After editing, restart:
+
+```bash
+sudo nano /etc/ice-demo/ice-demo.env
+sudo systemctl restart ice-demo
+```
+
+Defaults:
+
+```ini
+PORT=3000
+HOSTNAME=0.0.0.0
+NODE_ENV=production
+```
+
+### Uninstall
+
+```bash
+sudo apt remove ice-demo          # keeps /etc/ice-demo and the ice-demo user
+sudo apt purge ice-demo           # also removes config + service user
+sudo rm /etc/apt/sources.list.d/ice-demo.list
+sudo rm /etc/apt/trusted.gpg.d/ice-demo.gpg
+```
+
+More detail in [`docs/INSTALL.md`](./docs/INSTALL.md) (end users) and [`docs/PUBLISHING.md`](./docs/PUBLISHING.md) (maintainers cutting releases).
+
 ## What's inside
 
 | Page | Purpose |
