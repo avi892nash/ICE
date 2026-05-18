@@ -29,13 +29,11 @@ env:
 #   version ──► build-app ──► test-deb ──► release
 #
 # Post-release (test-release.yml): on release published, the published
-# .deb is downloaded, installed in a fresh runner, and the Next.js
-# server is smoke-tested — proving the artifact end users actually
-# fetch from GitHub Releases works in isolation.
+# .deb is downloaded, installed in a fresh runner, and smoke-tested.
 
 jobs:
   # ---------------------------------------------------------------------------
-  # commitlint: lint PR commit messages against conventional-commits
+  # Lint PR commit messages via the dedicated wagoid action — no npm ci needed
   # ---------------------------------------------------------------------------
   commitlint:
     name: Commitlint
@@ -45,19 +43,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - run: npm ci
-      - run: |
-          npx commitlint \
-            --from ${{ github.event.pull_request.base.sha }} \
-            --to ${{ github.event.pull_request.head.sha }} \
-            --verbose
+      - uses: wagoid/commitlint-github-action@v6
 
   # ---------------------------------------------------------------------------
-  # version: compute the next version string for build-app to bake into the deb
+  # Compute version string for build-app and for the release summary
   # ---------------------------------------------------------------------------
   version:
     name: Version
@@ -75,7 +64,8 @@ jobs:
           echo "FULL=${BASE}+${SHA}" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------
-  # build-app: typecheck, next build, package as .deb via nfpm
+  # Build the Next.js app + package as .deb via nfpm. Upload as artifact for
+  # test-deb + release jobs to reuse — single build, no duplication.
   # ---------------------------------------------------------------------------
   build-app:
     name: Build .deb
@@ -105,12 +95,11 @@ jobs:
           curl -fsSL "$url" -o nfpm.deb
           sudo dpkg -i nfpm.deb
           rm nfpm.deb
-          nfpm --version
 
       - name: Build .deb
         run: bash packaging/scripts/build-deb.sh ${{ needs.version.outputs.base }}
 
-      - name: Rename .deb to a stable name for artifact transfer
+      - name: Normalize artifact filename to ice-demo.deb
         run: cp dist/ice-demo_*_amd64.deb ice-demo.deb
 
       - uses: actions/upload-artifact@v4
@@ -120,8 +109,8 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # test-deb: actually install the .deb on a clean runner + smoke-test the app
-  # Catches packaging mistakes BEFORE release (file paths, deps, missing files).
+  # Install the built .deb on a clean runner + hit endpoints. Catches packaging
+  # mistakes BEFORE we release.
   # ---------------------------------------------------------------------------
   test-deb:
     name: Smoke-test .deb
@@ -157,7 +146,7 @@ jobs:
           [ -x /usr/bin/ice-demo-update ] || { echo "FAIL: /usr/bin/ice-demo-update missing or not executable"; exit 1; }
           echo "PASS: ice-demo-update present + executable"
 
-      - name: Start Next.js server + smoke test endpoints
+      - name: Start server + smoke-test endpoints
         run: |
           NODE_ENV=production HOSTNAME=0.0.0.0 PORT=19877 \
             node /opt/ice-demo/server.js &
@@ -170,35 +159,32 @@ jobs:
 
           fail() { echo "FAIL: $*"; exit 1; }
 
-          # /  → 200 with title
           HTTP=$(curl -s -o /tmp/home.html -w "%{http_code}" http://localhost:19877/)
           [ "$HTTP" = "200" ] || fail "/ returned $HTTP"
           grep -q "ICE Demo" /tmp/home.html || fail "/ did not contain 'ICE Demo'"
 
-          # All app routes → 200
           for path in /algorithm /demo /candidates /limitations; do
             HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:19877$path")
             [ "$HTTP" = "200" ] || fail "$path returned $HTTP"
           done
 
-          # Metadata routes
           for path in /robots.txt /sitemap.xml /manifest.webmanifest; do
             HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:19877$path")
             [ "$HTTP" = "200" ] || fail "$path returned $HTTP"
           done
 
-          # Static assets served from /opt/ice-demo/public
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:19877/og-image.png)
           [ "$HTTP" = "200" ] || fail "/og-image.png returned $HTTP"
 
           echo "PASS: server up, 9 endpoints OK"
 
   # ---------------------------------------------------------------------------
-  # release: only on push to main, only after test-deb passes
-  # semantic-release tags + creates GH release + attaches the .deb.
+  # Release: downloads the artifact built earlier (no rebuild) and lets
+  # semantic-release attach it via @semantic-release/github. Matches Thor's
+  # release-uses-artifact-directly pattern.
   # ---------------------------------------------------------------------------
   release:
-    name: Release
+    name: Release v${{ needs.version.outputs.full }}
     runs-on: ubuntu-latest
     needs: [version, test-deb]
     if: github.event_name == 'push'
@@ -213,42 +199,26 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install release tooling
+        run: npm ci --no-audit --no-fund
 
-      - name: Build Next.js
-        # semantic-release calls bash packaging/scripts/build-deb.sh
-        # ${nextRelease.version} via @semantic-release/exec's prepareCmd.
-        # That script requires .next/standalone, so we have to build before
-        # invoking semantic-release.
-        run: npm run build
-
-      - name: Install nfpm (pinned)
-        run: |
-          set -e
-          url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
-          curl -fsSL "$url" -o nfpm.deb
-          sudo dpkg -i nfpm.deb
-          rm nfpm.deb
-
-      - name: Run semantic-release
-        id: semrel
-        uses: cycjimmy/semantic-release-action@v4
+      - name: Download .deb artifact built earlier
+        uses: actions/download-artifact@v4
         with:
-          semantic_version: 24
-          extra_plugins: |
-            @semantic-release/changelog@6
-            @semantic-release/exec@6
-            @semantic-release/git@10
-            conventional-changelog-conventionalcommits@8
+          name: ice-demo-deb
+          path: dist/
+
+      - name: Publish release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
 
       - name: Summary
         run: |
-          if [ "${{ steps.semrel.outputs.new_release_published }}" = "true" ]; then
-            echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }} — .deb attached to GitHub Release"
-          else
-            echo "::notice::No release this run — no commits triggered a version bump"
-          fi
+          echo "======================================="
+          echo "  ICE pipeline summary"
+          echo "======================================="
+          echo "  Version computed: ${{ needs.version.outputs.full }}"
+          echo "  Commit:           ${{ github.sha }}"
+          echo "  Artifact:         dist/ice-demo.deb"
+          echo "======================================="
