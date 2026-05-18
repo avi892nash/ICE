@@ -48,14 +48,15 @@ json_get() {
 }
 
 TAG=$(echo "$RELEASE_JSON" | json_get "d.tag_name")
-# We accept either of two asset names:
-#   - 'ice-demo_amd64.deb'           (stable, current convention)
-#   - 'ice-demo_X.Y.Z_amd64.deb'     (legacy, for releases ≤ v1.2.0)
+# Accept any historic .deb asset shape:
+#   - 'ice-demo.deb'                  (current, Thor-style)
+#   - 'ice-demo_amd64.deb'            (v1.3.0 — v1.3.x)
+#   - 'ice-demo_X.Y.Z_amd64.deb'      (≤ v1.2.0)
 DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
-  | json_get "(d.assets||[]).find(a=>/^ice-demo(_\\d+\\.\\d+\\.\\d+)?_amd64\\.deb$/.test(a.name))?.browser_download_url")
+  | json_get "(d.assets||[]).find(a=>/^ice-demo(_\\d+\\.\\d+\\.\\d+)?(_amd64)?\\.deb$/.test(a.name))?.browser_download_url")
 
 [ -n "$TAG" ] || fail "release has no tag_name"
-[ -n "$DOWNLOAD_URL" ] || fail "no ice-demo_*amd64.deb asset on release $TAG"
+[ -n "$DOWNLOAD_URL" ] || fail "no ice-demo*.deb asset on release $TAG"
 
 LOCAL_TAG=$(cat "$INSTALLED_TAG_FILE" 2>/dev/null || echo "")
 

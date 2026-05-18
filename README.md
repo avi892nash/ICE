@@ -11,14 +11,9 @@ Run as a long-lived service on any Debian-based Linux. Auto-upgrades are built i
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/avi892nash/ICE/main/install.sh | sudo sh
-```
-
-Or, if you'd rather inspect the .deb before installing:
-
-```bash
-curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo_amd64.deb -o ice-demo.deb
-sudo apt install -y ./ice-demo.deb
+curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo.deb \
+  -o /tmp/ice-demo.deb
+sudo apt install /tmp/ice-demo.deb
 ```
 
 That's it — the service is up at <http://localhost:3000>. From now on, the bundled `ice-demo-update.timer` polls `/releases/latest` on GitHub every 30 minutes and applies new versions automatically.
