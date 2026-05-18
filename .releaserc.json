@@ -45,8 +45,8 @@
         "assets": [
           {
             "path": "dist/ice-demo.deb",
-            "label": "Debian package (amd64)",
-            "name": "ice-demo_amd64.deb"
+            "label": "Debian package",
+            "name": "ice-demo.deb"
           }
         ],
         "successComment": false,

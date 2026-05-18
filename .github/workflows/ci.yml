@@ -100,7 +100,9 @@ jobs:
         run: bash packaging/scripts/build-deb.sh ${{ needs.version.outputs.base }}
 
       - name: Normalize artifact filename to ice-demo.deb
-        run: cp dist/ice-demo_*_amd64.deb ice-demo.deb
+        # nfpm names the file ice-demo_VERSION_all.deb (architecture: all);
+        # glob both old amd64 and new all suffixes for transitional safety.
+        run: cp dist/ice-demo_*.deb ice-demo.deb
 
       - uses: actions/upload-artifact@v4
         with:

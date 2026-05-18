@@ -11,24 +11,21 @@ ice-demo ships as a `.deb` attached to each [GitHub Release](https://github.com/
 
 ## Install
 
-### One-line install (recommended)
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/avi892nash/ICE/main/install.sh | sudo sh
+curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo.deb \
+  -o /tmp/ice-demo.deb
+sudo apt install /tmp/ice-demo.deb
 ```
 
-That's it. The script downloads the latest .deb from [GitHub Releases](https://github.com/avi892nash/ICE/releases) and runs `apt install` so the `nodejs`/`adduser`/`systemd` deps are auto-resolved.
+The installer will:
 
-### Manual install
+- Create a system user `ice-demo`
+- Install the standalone Next.js bundle to `/opt/ice-demo/`
+- Install the auto-updater to `/usr/bin/ice-demo-update`
+- Start `ice-demo.service` on port `3000`
+- Enable `ice-demo-update.timer` (checks for updates every 30 min)
 
-If you'd rather see the .deb before installing:
-
-```bash
-curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo_amd64.deb -o /tmp/ice-demo.deb
-sudo apt install -y /tmp/ice-demo.deb
-```
-
-GitHub redirects `releases/latest/download/<name>` to the same asset on the newest release, so this URL always pulls the current version.
+GitHub redirects `/releases/latest/download/<name>` to the same asset on the newest release, so this URL always pulls the current version. `apt install ./file.deb` is preferred over `dpkg -i` because it auto-resolves the `nodejs` / `adduser` / `systemd` dependency lines.
 
 The service is now up at <http://localhost:3000>.
 

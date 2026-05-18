@@ -42,11 +42,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Accept both the new stable name (ice-demo_amd64.deb, from v1.2.1+)
-          # and the legacy versioned name (ice-demo_X.Y.Z_amd64.deb, ≤ v1.2.0)
+          # Match any historic .deb asset shape:
+          #   ice-demo.deb (current), ice-demo_amd64.deb (v1.3.x),
+          #   ice-demo_X.Y.Z_amd64.deb (≤ v1.2.0)
           gh release download "${{ steps.tag.outputs.tag }}" \
             --repo "${{ github.repository }}" \
-            --pattern "ice-demo*amd64.deb" \
+            --pattern "ice-demo*.deb" \
             --output ice-demo.deb
 
       - uses: actions/setup-node@v4
@@ -87,6 +88,6 @@ jobs:
         run: |
           API="https://api.github.com/repos/${{ github.repository }}/releases/latest"
           DEB_NAME=$(curl -fsSL -H "Accept: application/vnd.github+json" "$API" \
-            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);process.stdout.write((r.assets||[]).map(a=>a.name).find(n=>/^ice-demo(_\\d+\\.\\d+\\.\\d+)?_amd64\\.deb$/.test(n))||'')}")
-          [ -n "$DEB_NAME" ] || { echo "FAIL: latest release has no ice-demo_amd64.deb asset"; exit 1; }
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);process.stdout.write((r.assets||[]).map(a=>a.name).find(n=>/^ice-demo(_\\d+\\.\\d+\\.\\d+)?(_amd64)?\\.deb$/.test(n))||'')}")
+          [ -n "$DEB_NAME" ] || { echo "FAIL: latest release has no ice-demo*.deb asset"; exit 1; }
           echo "PASS: ice-demo-update will see asset '$DEB_NAME'"

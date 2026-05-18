@@ -3,7 +3,10 @@
 # Docs: https://nfpm.goreleaser.com/configuration/
 
 name: ice-demo
-arch: amd64
+# Architecture: all — the .deb contains only Node.js code (the Next.js
+# standalone bundle); there are no compiled native binaries that bind it
+# to amd64. Matches Thor's 'Architecture: all' for the same reason.
+arch: all
 platform: linux
 version: ${VERSION}
 version_schema: semver
