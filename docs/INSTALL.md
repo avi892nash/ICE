@@ -12,9 +12,7 @@ ice-demo ships as a `.deb` attached to each [GitHub Release](https://github.com/
 ## Install
 
 ```bash
-curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo.deb \
-  -o /tmp/ice-demo.deb
-sudo apt install /tmp/ice-demo.deb
+curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo.deb -o /tmp/ice-demo.deb && sudo apt install /tmp/ice-demo.deb
 ```
 
 The installer will:
