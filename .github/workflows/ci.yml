@@ -10,8 +10,6 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  id-token: write
-  pages: write
 
 concurrency:
   group: pipeline-${{ github.ref }}
@@ -19,26 +17,17 @@ concurrency:
 
 env:
   # Bump when nfpm releases a fix you want. /releases/latest/download/
-  # asset URLs are versioned now — the unversioned shortcut 404s.
+  # asset URLs are versioned — the unversioned shortcut 404s.
   NFPM_VERSION: "2.46.3"
 
 jobs:
   pipeline:
     name: Pipeline
     runs-on: ubuntu-latest
-    # NOTE: Don't set a job-level `environment:` here. The github-pages
-    # environment has a 'deployment branches' rule that blocks runs from
-    # PR branches and would cause the whole job to fail in <1s before any
-    # step starts. actions/deploy-pages binds the deployment to the env
-    # internally — we just don't need the job-level association.
-
     steps:
-      # -- Checkout + Node ----------------------------------------------
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # persist-credentials so semantic-release's @semantic-release/git
-          # plugin can push the CHANGELOG bump back to main.
           persist-credentials: true
 
       - uses: actions/setup-node@v4
@@ -49,7 +38,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # -- PR-only commit linting ---------------------------------------
       - name: Lint PR commit messages
         if: github.event_name == 'pull_request'
         run: |
@@ -58,14 +46,12 @@ jobs:
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
 
-      # -- Type-check + build (always) ----------------------------------
       - name: Type-check
         run: npx tsc --noEmit
 
       - name: Build Next.js
         run: npm run build
 
-      # -- Push-to-main: release + .deb ---------------------------------
       - name: Install nfpm (pinned)
         if: github.event_name == 'push'
         run: |
@@ -76,10 +62,6 @@ jobs:
           sudo dpkg -i nfpm.deb
           rm nfpm.deb
           nfpm --version
-
-      - name: Install apt-utils (apt-ftparchive)
-        if: github.event_name == 'push'
-        run: sudo apt-get update && sudo apt-get install -y apt-utils
 
       - name: Run semantic-release
         if: github.event_name == 'push'
@@ -100,46 +82,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           if [ "${{ steps.semrel.outputs.new_release_published }}" = "true" ]; then
-            echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }}"
+            echo "::notice::Released v${{ steps.semrel.outputs.new_release_version }} — .deb attached to GitHub Release"
           else
             echo "::notice::No release this run — no commits triggered a version bump"
           fi
-
-      # -- Publish APT repo to GitHub Pages (only when a release was cut)
-      - name: Import GPG key
-        if: steps.semrel.outputs.new_release_published == 'true' && env.GPG_PRIVATE_KEY != ''
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-      - name: Build signed APT repo
-        if: steps.semrel.outputs.new_release_published == 'true'
-        env:
-          GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
-          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-          APT_REPO_ORIGIN: "ICE Demo APT"
-          APT_REPO_LABEL: "ice-demo"
-          APT_REPO_SUITE: "stable"
-        run: bash packaging/apt-repo/build-repo.sh
-
-      - name: Stage Pages site
-        if: steps.semrel.outputs.new_release_published == 'true'
-        run: |
-          mkdir -p site
-          cp packaging/apt-repo/index.html site/index.html
-          cp -r public/apt site/
-
-      - name: Configure Pages
-        if: steps.semrel.outputs.new_release_published == 'true'
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        if: steps.semrel.outputs.new_release_published == 'true'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        if: steps.semrel.outputs.new_release_published == 'true'
-        id: deploy
-        uses: actions/deploy-pages@v4
