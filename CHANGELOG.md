@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/avi892nash/ICE/compare/v1.4.0...v1.4.1) (2026-05-18)
+
+### Refactor
+
+* **release:** final Thor alignment — arch all, ice-demo.deb, no install.sh ([#20](https://github.com/avi892nash/ICE/issues/20)) ([a2bc357](https://github.com/avi892nash/ICE/commit/a2bc35766c7f3a7e97c5ce0a1ee25e93e5d8fbfe))
+
 ## [1.4.0](https://github.com/avi892nash/ICE/compare/v1.3.1...v1.4.0) (2026-05-18)
 
 ### Features
