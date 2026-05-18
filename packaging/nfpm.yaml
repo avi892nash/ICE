@@ -23,9 +23,11 @@ homepage: https://github.com/avi892nash/ICE
 license: MIT
 
 depends:
+  # nodejs is the only hard runtime dep — adduser and systemd are
+  # essentially pre-installed on every Debian/Ubuntu, and the postinst
+  # already guards 'if [ -d /run/systemd/system ]' so absent-systemd
+  # doesn't break the install. Matches Thor.
   - nodejs (>= 18)
-  - adduser
-  - systemd
 
 contents:
   # Standalone Next.js server bundle.

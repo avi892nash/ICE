@@ -97,7 +97,10 @@ jobs:
           rm nfpm.deb
 
       - name: Build .deb
-        run: bash packaging/scripts/build-deb.sh ${{ needs.version.outputs.base }}
+        # Use the FULL version (BASE+SHA, e.g. 2.0.1+4bdc7d8) so the .deb
+        # control file reflects the exact commit the artifact was built
+        # from. Mirrors Thor's build-server step.
+        run: bash packaging/scripts/build-deb.sh ${{ needs.version.outputs.full }}
 
       - name: Normalize artifact filename to ice-demo.deb
         # nfpm names the file ice-demo_VERSION_all.deb (architecture: all);
