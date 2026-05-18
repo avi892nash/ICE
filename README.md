@@ -75,3 +75,26 @@ Or temporarily: System Settings → Network → Firewall → off.
 ## Design prompts
 
 See [`DESIGN_PROMPTS.md`](./DESIGN_PROMPTS.md) for prompts you can feed to Claude Design to regenerate any page with a more polished look.
+
+## Installing as a service
+
+Pre-built `.deb` packages are published to an APT repo on GitHub Pages and a
+systemd timer keeps your install up to date automatically. See
+[`docs/INSTALL.md`](./docs/INSTALL.md).
+
+## Releasing
+
+The repo uses [conventional commits](https://www.conventionalcommits.org/) +
+[semantic-release](https://semantic-release.gitbook.io/) to cut versions, build
+`.deb` packages with [nfpm](https://nfpm.goreleaser.com/), and publish them to
+the APT repo on GitHub Pages. Full details in
+[`docs/PUBLISHING.md`](./docs/PUBLISHING.md).
+
+Quick reference for contributors:
+
+```
+feat: …    → minor release (X.Y+1.0)
+fix:  …    → patch release (X.Y.Z+1)
+feat!: …   → major release (X+1.0.0)
+docs:, chore:, ci:, style:, test:  → no release
+```
