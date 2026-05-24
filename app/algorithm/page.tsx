@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { IceSimulator } from "@/components/IceSimulator";
+import {
+  buildBreadcrumbs,
+  buildLearningResource,
+  JsonLdScript,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Algorithm walkthrough",
@@ -14,9 +19,34 @@ export const metadata: Metadata = {
   },
 };
 
+const learningResource = buildLearningResource({
+  path: "/algorithm",
+  name: "ICE Algorithm Walkthrough with 4-topology simulator",
+  description:
+    "Animated, step-by-step walkthrough of the ICE protocol (RFC 8445). Covers candidate gathering, pair formation, connectivity checks, nomination, and consent freshness, with a simulator that plays the algorithm out on four network topologies: same-LAN, cone NAT, no-hairpin NAT, and symmetric NAT.",
+  learningResourceType: ["Tutorial", "Simulation"],
+  teaches: [
+    "ICE candidate gathering",
+    "ICE pair formation and priority computation",
+    "STUN binding-request connectivity checks",
+    "Nomination and consent freshness (RFC 7675)",
+    "Why symmetric NAT defeats STUN",
+  ],
+  timeRequired: "PT15M",
+  interactivityType: "mixed",
+  educationalLevel: "intermediate",
+});
+
+const breadcrumbs = buildBreadcrumbs([
+  { name: "Overview", path: "/" },
+  { name: "Algorithm walkthrough", path: "/algorithm" },
+]);
+
 export default function AlgorithmPage() {
   return (
     <div className="space-y-12">
+      <JsonLdScript id="ld-json-page" data={learningResource} />
+      <JsonLdScript id="ld-json-breadcrumbs" data={breadcrumbs} />
       <header>
         <div className="inline-block px-3 py-1 rounded-full bg-ice-100 text-ice-800 text-xs font-medium mb-3">
           RFC 8445 (ICE) + RFC 5389 (STUN) + RFC 8656 (TURN)

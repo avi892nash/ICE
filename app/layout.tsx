@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import Script from "next/script";
 import "./globals.css";
 import { version as APP_VERSION } from "../package.json";
+import {
+  COURSE_JSON_LD,
+  JsonLdScript,
+  SITE_NAME,
+  SITE_URL,
+} from "@/lib/seo";
 
-const SITE_URL = "https://avi892nash.github.io/ICE";
-const SITE_NAME = "ICE Demo";
 const SITE_TITLE = "ICE Demo — Interactive Connectivity Establishment";
 const SITE_DESCRIPTION =
   "A Next.js demo of WebRTC's ICE protocol (RFC 8445): live two-peer connection, candidate explorer, animated algorithm simulator across 4 network topologies, and a candid look at why ICE fails 10–15% of the time in production.";
@@ -135,12 +138,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen">
-        <Script
-          id="ld-json-webapp"
-          type="application/ld+json"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
-        />
+        <JsonLdScript id="ld-json-webapp" data={JSON_LD} />
+        <JsonLdScript id="ld-json-course" data={COURSE_JSON_LD} />
         <header className="border-b border-slate-200 bg-white">
           <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
