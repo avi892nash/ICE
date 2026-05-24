@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { ICEDemo } from "@/components/ICEDemo";
+import {
+  buildBreadcrumbs,
+  buildLearningResource,
+  JsonLdScript,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Live two-peer demo",
@@ -14,9 +19,34 @@ export const metadata: Metadata = {
   },
 };
 
+const learningResource = buildLearningResource({
+  path: "/demo",
+  name: "Live WebRTC two-peer ICE demo",
+  description:
+    "Hands-on lab: open two browser tabs, exchange SDP offer/answer via copy-paste, watch ICE candidates arrive in real time, then chat over a WebRTC data channel. Includes a free TURN fallback so the demo works even through symmetric NAT.",
+  learningResourceType: ["Interactive Resource", "Demonstration"],
+  teaches: [
+    "WebRTC SDP offer/answer exchange",
+    "Out-of-band signaling (copy-paste, WebSocket equivalents)",
+    "Reading the selected candidate pair and ICE connection state",
+    "WebRTC data channels for arbitrary peer-to-peer messages",
+    "When TURN relay is needed and how it shows up in the pair list",
+  ],
+  timeRequired: "PT10M",
+  interactivityType: "active",
+  educationalLevel: "intermediate",
+});
+
+const breadcrumbs = buildBreadcrumbs([
+  { name: "Overview", path: "/" },
+  { name: "Live two-peer demo", path: "/demo" },
+]);
+
 export default function DemoPage() {
   return (
     <div className="space-y-8">
+      <JsonLdScript id="ld-json-page" data={learningResource} />
+      <JsonLdScript id="ld-json-breadcrumbs" data={breadcrumbs} />
       <div>
         <h1 className="text-3xl font-bold text-slate-900 mb-3">
           Live ICE demo

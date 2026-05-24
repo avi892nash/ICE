@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { CandidateExplorer } from "@/components/CandidateExplorer";
+import {
+  buildBreadcrumbs,
+  buildLearningResource,
+  JsonLdScript,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Candidate explorer",
@@ -14,9 +19,34 @@ export const metadata: Metadata = {
   },
 };
 
+const learningResource = buildLearningResource({
+  path: "/candidates",
+  name: "ICE Candidate Explorer — gather and inspect WebRTC candidates",
+  description:
+    "Interactive tool that runs ICE gathering from your browser against public STUN servers and parses every candidate field — foundation, component, priority, related address — so you can see exactly what host, srflx, prflx, and relay candidates look like in the wild.",
+  learningResourceType: ["Interactive Resource", "Simulation"],
+  teaches: [
+    "Parsing ICE candidate SDP lines",
+    "Distinguishing host / srflx / prflx / relay candidate types",
+    "ICE candidate priority computation",
+    "mDNS host-candidate obfuscation (.local hostnames)",
+    "How your NAT's public mapping shows up as an srflx candidate",
+  ],
+  timeRequired: "PT5M",
+  interactivityType: "active",
+  educationalLevel: "intermediate",
+});
+
+const breadcrumbs = buildBreadcrumbs([
+  { name: "Overview", path: "/" },
+  { name: "Candidate explorer", path: "/candidates" },
+]);
+
 export default function CandidatesPage() {
   return (
     <div className="space-y-8">
+      <JsonLdScript id="ld-json-page" data={learningResource} />
+      <JsonLdScript id="ld-json-breadcrumbs" data={breadcrumbs} />
       <div>
         <h1 className="text-3xl font-bold text-slate-900 mb-3">
           Candidate explorer

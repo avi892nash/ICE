@@ -1,8 +1,43 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { buildLearningResource, JsonLdScript } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: {
+    absolute: "ICE Demo — Interactive Connectivity Establishment for WebRTC",
+  },
+  description:
+    "An interactive, self-paced tutorial on WebRTC's ICE protocol (RFC 8445): the 4-stage pipeline (gathering, signaling, checks, nomination), the candidate types (host, srflx, prflx, relay), and where the algorithm fails in production.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "ICE Demo — Interactive WebRTC ICE tutorial",
+    description:
+      "Learn how WebRTC's ICE protocol finds a path between peers, with a live demo, candidate explorer, algorithm simulator, and a candid look at why it fails ~10–15% of the time.",
+    url: "/",
+  },
+};
+
+const homePageJsonLd = buildLearningResource({
+  path: "/",
+  name: "ICE Overview — the four-stage pipeline and candidate types",
+  description:
+    "Entry point for a self-paced WebRTC ICE tutorial. Introduces the 4-stage pipeline (gathering, signaling, connectivity checks, nomination) and the four candidate types (host, srflx, prflx, relay), and links to the interactive demos and algorithm simulator.",
+  learningResourceType: ["Overview", "Tutorial"],
+  teaches: [
+    "WebRTC ICE protocol (RFC 8445)",
+    "ICE 4-stage pipeline",
+    "ICE candidate types: host, srflx, prflx, relay",
+    "Why peer-to-peer connections need NAT traversal",
+  ],
+  timeRequired: "PT5M",
+  interactivityType: "expositive",
+  educationalLevel: "beginner",
+});
 
 export default function HomePage() {
   return (
     <div className="space-y-12">
+      <JsonLdScript id="ld-json-page" data={homePageJsonLd} />
       <section>
         <div className="inline-block px-3 py-1 rounded-full bg-ice-100 text-ice-800 text-xs font-medium mb-4">
           RFC 8445 · WebRTC

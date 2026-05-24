@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import {
+  buildBreadcrumbs,
+  buildLearningResource,
+  JsonLdScript,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Limitations & failure modes",
@@ -13,9 +18,36 @@ export const metadata: Metadata = {
   },
 };
 
+const learningResource = buildLearningResource({
+  path: "/limitations",
+  name: "WebRTC ICE Limitations and Failure Modes",
+  description:
+    "Field guide to the seven mechanisms that cause WebRTC ICE to fail in production: symmetric NAT, TURN economics, IP leakage, setup latency, signaling burden, ICE-restart pain, and the absent trust model. Each entry explains the mechanism, severity, and why the protocol can't fix it cleanly.",
+  learningResourceType: ["Case Study", "Reference"],
+  teaches: [
+    "Why symmetric NAT defeats STUN-based traversal",
+    "The economics of running a TURN relay",
+    "How WebRTC leaks local IP addresses and mDNS mitigations",
+    "Sources of ICE connection setup latency",
+    "The signaling channel as an unavoidable backend dependency",
+    "Cost of ICE restart on network changes",
+    "Why WebRTC has no built-in identity / trust model",
+  ],
+  timeRequired: "PT15M",
+  interactivityType: "expositive",
+  educationalLevel: "advanced",
+});
+
+const breadcrumbs = buildBreadcrumbs([
+  { name: "Overview", path: "/" },
+  { name: "Limitations & failure modes", path: "/limitations" },
+]);
+
 export default function LimitationsPage() {
   return (
     <div className="space-y-10">
+      <JsonLdScript id="ld-json-page" data={learningResource} />
+      <JsonLdScript id="ld-json-breadcrumbs" data={breadcrumbs} />
       <div>
         <h1 className="text-3xl font-bold text-slate-900 mb-3">
           Why ICE doesn't always work
