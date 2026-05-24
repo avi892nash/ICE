@@ -21,7 +21,7 @@ The installer will:
 - Install the standalone Next.js bundle to `/opt/ice-demo/`
 - Install the auto-updater to `/usr/bin/ice-demo-update`
 - Start `ice-demo.service` on port `4123`
-- Enable `ice-demo-update.timer` (checks for updates every 30 min)
+- Enable `ice-demo-update.timer` (checks for updates every 5 min)
 
 GitHub redirects `/releases/latest/download/<name>` to the same asset on the newest release, so this URL always pulls the current version. `apt install ./file.deb` is preferred over `dpkg -i` because it auto-resolves the `nodejs` / `adduser` / `systemd` dependency lines.
 
@@ -34,7 +34,7 @@ The install enables two systemd units:
 | Unit | Purpose |
 | --- | --- |
 | `ice-demo.service` | Runs the Next.js server (hardened, dedicated `ice-demo` user) |
-| `ice-demo-update.timer` | Every 30 min: runs `/usr/bin/ice-demo-update`, which polls `https://api.github.com/repos/avi892nash/ICE/releases/latest`, compares `tag_name` against `/var/lib/ice-demo/installed-tag`, and `apt install`s the newer .deb if they differ |
+| `ice-demo-update.timer` | Every 5 min: runs `/usr/bin/ice-demo-update`, which polls `https://api.github.com/repos/avi892nash/ICE/releases/latest`, compares `tag_name` against `/var/lib/ice-demo/installed-tag`, and `apt install`s the newer .deb if they differ |
 
 Inspect the timer:
 

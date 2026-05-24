@@ -14,7 +14,7 @@ Run as a long-lived service on any Debian-based Linux. Auto-upgrades are built i
 curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo.deb -o /tmp/ice-demo.deb && sudo apt install /tmp/ice-demo.deb
 ```
 
-That's it — the service is up at <http://localhost:4123>. From now on, the bundled `ice-demo-update.timer` polls `/releases/latest` on GitHub every 30 minutes and applies new versions automatically.
+That's it — the service is up at <http://localhost:4123>. From now on, the bundled `ice-demo-update.timer` polls `/releases/latest` on GitHub every 5 minutes and applies new versions automatically.
 
 ### How auto-upgrade works
 
@@ -23,7 +23,7 @@ The install enables two systemd units:
 | Unit | What it does |
 | --- | --- |
 | `ice-demo.service` | Runs the Next.js server (hardened: dedicated user, `PrivateTmp`, `ProtectSystem=strict`, …) |
-| `ice-demo-update.timer` | Every 30 min: `/usr/bin/ice-demo-update` polls the GitHub Releases API, compares the `tag_name` with `/var/lib/ice-demo/installed-tag`, and `apt install`s the new .deb if they differ |
+| `ice-demo-update.timer` | Every 5 min: `/usr/bin/ice-demo-update` polls the GitHub Releases API, compares the `tag_name` with `/var/lib/ice-demo/installed-tag`, and `apt install`s the new .deb if they differ |
 
 Common operations:
 

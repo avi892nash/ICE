@@ -4,12 +4,12 @@ Documentation=https://github.com/avi892nash/ICE
 Wants=ice-demo-update.service
 
 [Timer]
-# Check the GitHub Releases API for a new ice-demo version every 30 min,
-# with up to 10 min of randomized jitter so many clients don't all hit the
+# Check the GitHub Releases API for a new ice-demo version every 5 min,
+# with up to 1 min of randomized jitter so many clients don't all hit the
 # API at the same moment. First check happens 2 min after boot.
 OnBootSec=2min
-OnUnitActiveSec=30min
-RandomizedDelaySec=10min
+OnUnitActiveSec=5min
+RandomizedDelaySec=1min
 Persistent=true
 Unit=ice-demo-update.service
 
