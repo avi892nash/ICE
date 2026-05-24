@@ -1,3 +1,9 @@
+## [1.7.0](https://github.com/avi892nash/ICE/compare/v1.6.0...v1.7.0) (2026-05-24)
+
+### Features
+
+* **seo:** treat site as educational resource and fix canonical URL ([#27](https://github.com/avi892nash/ICE/issues/27)) ([97a9cdc](https://github.com/avi892nash/ICE/commit/97a9cdc6be97b486d4753b2317973ac8e792be7b))
+
 ## [1.6.0](https://github.com/avi892nash/ICE/compare/v1.5.2...v1.6.0) (2026-05-24)
 
 ### Features
