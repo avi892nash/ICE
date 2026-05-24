@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/avi892nash/ICE/compare/v1.5.2...v1.6.0) (2026-05-24)
+
+### Features
+
+* **ui:** show package version in footer ([#28](https://github.com/avi892nash/ICE/issues/28)) ([2042da3](https://github.com/avi892nash/ICE/commit/2042da3b5d8da1681cf0a53b0882cb0fa2658a50))
+
 ## [1.5.2](https://github.com/avi892nash/ICE/compare/v1.5.1...v1.5.2) (2026-05-24)
 
 ### Bug Fixes
