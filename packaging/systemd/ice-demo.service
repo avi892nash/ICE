@@ -29,7 +29,10 @@ ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictNamespaces=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+# MemoryDenyWriteExecute is intentionally omitted: it blocks mprotect(PROT_EXEC)
+# on writable pages, which kills V8's JIT (BaselineCompiler / CodeBuilder),
+# causing Node to abort with "Check failed: 12 == errno" (ENOMEM) on the first
+# function it tries to compile. Observed in deployment on aarch64 / Node 22.
 SystemCallArchitectures=native
 
 [Install]
