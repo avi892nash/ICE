@@ -67,11 +67,12 @@ sudo systemctl restart ice-demo
 Defaults:
 
 ```ini
-PORT=4123
-UNIQUE_PORT=5817
+ICE_DEMO_PORT=4123
 HOSTNAME=0.0.0.0
 NODE_ENV=production
 ```
+
+`ICE_DEMO_PORT` is named to avoid clashing with the generic `$PORT` that other apps on the same machine may also read. The systemd unit maps it back to `PORT` when launching Node.
 
 ## Operations
 
