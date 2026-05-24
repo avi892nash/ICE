@@ -60,7 +60,7 @@ ice-demo installed successfully.
   Auto-upgrade:   systemctl list-timers ice-demo-update.timer
   Configure:      /etc/ice-demo/ice-demo.env (then: systemctl restart ice-demo)
 
-Default URL:      http://localhost:3000
+Default URL:      http://localhost:4123
 
 EOF
 
