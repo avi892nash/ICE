@@ -20,12 +20,12 @@ The installer will:
 - Create a system user `ice-demo`
 - Install the standalone Next.js bundle to `/opt/ice-demo/`
 - Install the auto-updater to `/usr/bin/ice-demo-update`
-- Start `ice-demo.service` on port `3000`
+- Start `ice-demo.service` on port `4123`
 - Enable `ice-demo-update.timer` (checks for updates every 30 min)
 
 GitHub redirects `/releases/latest/download/<name>` to the same asset on the newest release, so this URL always pulls the current version. `apt install ./file.deb` is preferred over `dpkg -i` because it auto-resolves the `nodejs` / `adduser` / `systemd` dependency lines.
 
-The service is now up at <http://localhost:3000>.
+The service is now up at <http://localhost:4123>.
 
 ## Auto-upgrade
 
@@ -67,7 +67,8 @@ sudo systemctl restart ice-demo
 Defaults:
 
 ```ini
-PORT=3000
+PORT=4123
+UNIQUE_PORT=5817
 HOSTNAME=0.0.0.0
 NODE_ENV=production
 ```

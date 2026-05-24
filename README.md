@@ -14,7 +14,7 @@ Run as a long-lived service on any Debian-based Linux. Auto-upgrades are built i
 curl -fsSL https://github.com/avi892nash/ICE/releases/latest/download/ice-demo.deb -o /tmp/ice-demo.deb && sudo apt install /tmp/ice-demo.deb
 ```
 
-That's it — the service is up at <http://localhost:3000>. From now on, the bundled `ice-demo-update.timer` polls `/releases/latest` on GitHub every 30 minutes and applies new versions automatically.
+That's it — the service is up at <http://localhost:4123>. From now on, the bundled `ice-demo-update.timer` polls `/releases/latest` on GitHub every 30 minutes and applies new versions automatically.
 
 ### How auto-upgrade works
 
@@ -46,7 +46,8 @@ sudo systemctl restart ice-demo
 Defaults:
 
 ```ini
-PORT=3000
+PORT=4123
+UNIQUE_PORT=5817
 HOSTNAME=0.0.0.0
 NODE_ENV=production
 ```
