@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import Script from "next/script";
 import "./globals.css";
+import { version as APP_VERSION } from "../package.json";
 
 const SITE_URL = "https://avi892nash.github.io/ICE";
 const SITE_NAME = "ICE Demo";
@@ -185,15 +186,27 @@ export default function RootLayout({
               Built with Next.js to demonstrate WebRTC ICE. Educational use
               only.
             </span>
-            <a
-              href="https://github.com/avi892nash/ICE"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="View ICE Demo source on GitHub (opens in a new tab)"
-              className="text-ice-600 hover:text-ice-700 hover:underline whitespace-nowrap"
-            >
-              View on GitHub →
-            </a>
+            <div className="flex items-center gap-3">
+              <a
+                href={`https://github.com/avi892nash/ICE/releases/tag/v${APP_VERSION}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Release notes for ICE Demo v${APP_VERSION} on GitHub (opens in a new tab)`}
+                className="font-mono text-slate-400 hover:text-slate-600 whitespace-nowrap"
+                title={`ICE Demo v${APP_VERSION}`}
+              >
+                v{APP_VERSION}
+              </a>
+              <a
+                href="https://github.com/avi892nash/ICE"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View ICE Demo source on GitHub (opens in a new tab)"
+                className="text-ice-600 hover:text-ice-700 hover:underline whitespace-nowrap"
+              >
+                View on GitHub →
+              </a>
+            </div>
           </div>
         </footer>
       </body>
