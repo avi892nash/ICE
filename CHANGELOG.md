@@ -1,3 +1,9 @@
+## [1.5.1](https://github.com/avi892nash/ICE/compare/v1.5.0...v1.5.1) (2026-05-24)
+
+### Refactor
+
+* **packaging:** rename PORT to ICE_DEMO_PORT, drop UNIQUE_PORT ([#24](https://github.com/avi892nash/ICE/issues/24)) ([827f825](https://github.com/avi892nash/ICE/commit/827f8259c0920398d3695a1f610e02d93912142e))
+
 ## [1.5.0](https://github.com/avi892nash/ICE/compare/v1.4.2...v1.5.0) (2026-05-24)
 
 ### Features
