@@ -10,7 +10,9 @@ User=ice-demo
 Group=ice-demo
 WorkingDirectory=/opt/ice-demo
 EnvironmentFile=/etc/ice-demo/ice-demo.env
-ExecStart=/usr/bin/node /opt/ice-demo/server.js
+# /usr/bin/env maps ICE_DEMO_PORT (our uniquely-named config key) back to
+# PORT, which is what the Next.js standalone server.js reads.
+ExecStart=/usr/bin/env PORT=${ICE_DEMO_PORT} /usr/bin/node /opt/ice-demo/server.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
