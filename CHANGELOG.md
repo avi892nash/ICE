@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/avi892nash/ICE/compare/v1.4.2...v1.5.0) (2026-05-24)
+
+### Features
+
+* **packaging:** change default PORT to 4123, add UNIQUE_PORT ([#23](https://github.com/avi892nash/ICE/issues/23)) ([9afc16e](https://github.com/avi892nash/ICE/commit/9afc16e2a9f097db13593f78bdb53db3891b0c33))
+
 ## [1.4.2](https://github.com/avi892nash/ICE/compare/v1.4.1...v1.4.2) (2026-05-18)
 
 ### Refactor
