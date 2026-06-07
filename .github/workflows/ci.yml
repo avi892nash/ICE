@@ -71,6 +71,8 @@ jobs:
   # ---------------------------------------------------------------------------
   # Run the Vitest unit suite (candidate parsing, signal encode/decode,
   # scenario data integrity). Gates build-app so broken logic never ships.
+  # Also renders a PNG results card (headless Chrome, pre-installed on the
+  # runner) and uploads it as the `test-results-card` artifact.
   # ---------------------------------------------------------------------------
   unit-tests:
     name: Unit tests
@@ -87,7 +89,33 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test
+        run: npm test -- --reporter=default --reporter=json --outputFile=test-results.json
+
+      - name: Render results card (PNG)
+        # always() so the card is produced even when tests fail — the json
+        # reporter writes test-results.json regardless of pass/fail.
+        if: always()
+        run: |
+          node .github/scripts/render-test-card.mjs
+          H=$(cat test-card-height.txt)
+          BROWSER=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
+          [ -n "$BROWSER" ] || { echo "FAIL: no Chrome/Chromium on runner"; exit 1; }
+          echo "browser=$BROWSER height=${H}px"
+          "$BROWSER" --headless=new --disable-gpu --hide-scrollbars --no-sandbox \
+            --force-device-scale-factor=2 --window-size=1180,${H} \
+            --user-data-dir="$(mktemp -d)" \
+            --screenshot=test-card.png "file://${PWD}/test-card.html"
+
+      - name: Upload results card
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-card
+          path: |
+            test-card.png
+            test-results.json
+          retention-days: 7
+          if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
   # Build the Next.js app + package as .deb via nfpm. Upload as artifact for

@@ -120,7 +120,7 @@ npm test            # run the suite once
 npm run test:watch  # re-run on change
 ```
 
-CI runs the same suite on every PR and gates the `.deb` build on it — see the `unit-tests` job in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+CI runs the same suite on every PR and gates the `.deb` build on it — see the `unit-tests` job in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). Each run also renders a PNG **results card** ([`.github/scripts/render-test-card.mjs`](./.github/scripts/render-test-card.mjs)) and uploads it as the `test-results-card` artifact, downloadable from the run's Summary page.
 
 ## How it works
 
