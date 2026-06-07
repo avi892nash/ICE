@@ -22,11 +22,16 @@ env:
 # Pipeline shape (PR):
 #
 #   commitlint
-#   version ──► build-app ──► test-deb
+#   unit-tests ─┐
+#   version ────┴─► build-app ──► test-deb
 #
 # Pipeline shape (push to main, adds release):
 #
-#   version ──► build-app ──► test-deb ──► release
+#   unit-tests ─┐
+#   version ────┴─► build-app ──► test-deb ──► release
+#
+# build-app waits on unit-tests, so a failing Vitest run blocks the .deb
+# build and any release.
 #
 # Post-release (test-release.yml): on release published, the published
 # .deb is downloaded, installed in a fresh runner, and smoke-tested.
@@ -64,13 +69,34 @@ jobs:
           echo "FULL=${BASE}+${SHA}" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------
+  # Run the Vitest unit suite (candidate parsing, signal encode/decode,
+  # scenario data integrity). Gates build-app so broken logic never ships.
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  # ---------------------------------------------------------------------------
   # Build the Next.js app + package as .deb via nfpm. Upload as artifact for
   # test-deb + release jobs to reuse — single build, no duplication.
   # ---------------------------------------------------------------------------
   build-app:
     name: Build .deb
     runs-on: ubuntu-latest
-    needs: version
+    needs: [version, unit-tests]
     steps:
       - uses: actions/checkout@v4
 

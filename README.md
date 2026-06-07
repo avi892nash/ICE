@@ -111,6 +111,17 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp $(which node)
 
 Or temporarily: System Settings → Network → Firewall → off.
 
+## Testing
+
+Unit tests cover the pure logic — ICE candidate parsing, base64 signal encode/decode, and the integrity of the simulator scenario data (`lib/scenarios.ts`). They run in plain Node (no browser) via [Vitest](https://vitest.dev/).
+
+```bash
+npm test            # run the suite once
+npm run test:watch  # re-run on change
+```
+
+CI runs the same suite on every PR and gates the `.deb` build on it — see the `unit-tests` job in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+
 ## How it works
 
 - **`lib/webrtc.ts`** — peer connection factory, candidate parser, signaling encode/decode. Uses public Google + Cloudflare STUN.
@@ -129,6 +140,7 @@ Or temporarily: System Settings → Network → Firewall → off.
 - TypeScript
 - Tailwind CSS
 - Native browser WebRTC APIs (no shims)
+- Vitest for unit tests
 
 ## Design prompts
 
