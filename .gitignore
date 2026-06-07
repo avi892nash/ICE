@@ -5,6 +5,10 @@
 
 # testing
 /coverage
+test-results.json
+test-card.html
+test-card.png
+test-card-height.txt
 
 # next.js
 /.next/
